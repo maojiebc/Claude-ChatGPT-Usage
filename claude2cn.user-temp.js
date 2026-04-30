@@ -3,14 +3,13 @@
 // @namespace    https://github.com/jyking/claude2cn/
 // @homepageURL  https://github.com/jyking/claude2cn/
 // @author       jyking
-// @version      1.6.0
+// @version      1.6.1
 // @description  Claude 中文汉化 ai翻译 10000行翻译, 剩余用量显示
+// @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
 // @grant        none
 // @license      MIT
 // @run-at       document-start
-// @downloadURL  https://update.greasyfork.org/scripts/570390/Claudeai-%E4%B8%AD%E6%96%87%E6%B1%89%E5%8C%96.user.js
-// @updateURL    https://update.greasyfork.org/scripts/570390/Claudeai-%E4%B8%AD%E6%96%87%E6%B1%89%E5%8C%96.meta.js
 // ==/UserScript==
 
 (function () {
