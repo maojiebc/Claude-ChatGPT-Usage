@@ -3,12 +3,12 @@
 // @namespace    https://github.com/jyking/claude2cn/
 // @homepageURL  https://github.com/jyking/claude2cn/
 // @author       jyking
-// @version      1.7.3
+// @version      1.7.4
 // @description  Claude 中文汉化 ai翻译 10000行翻译, 剩余用量显示
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
-// @require      https://update.greasyfork.org/scripts/580982/1841849/claude2cn-design.js?v1.7.3
-// @require      https://update.greasyfork.org/scripts/580983/1841852/claude2cn-translations.js?v1.7.3
+// @require      https://update.greasyfork.org/scripts/580982/1841849/claude2cn-design.js?v1.7.4
+// @require      https://update.greasyfork.org/scripts/580983/1841852/claude2cn-translations.js?v1.7.4
 // @grant        none
 // @license      MIT
 // @run-at       document-start
@@ -753,63 +753,65 @@
   ClaudeUsageWidget.init();
 
   // Design 页面 DOM 翻译（/design 路径字符串打包在 JS bundle 中，无 i18n fetch 可拦截）
-  if (location.pathname.startsWith("/design")) {
-    function translateAttrs(el) {
-      for (const attr of ["title", "placeholder", "aria-label"]) {
-        const val = el.getAttribute(attr);
-        if (val && DESIGN_TRANSLATIONS[val]) {
-          el.setAttribute(attr, DESIGN_TRANSLATIONS[val]);
-        }
+  // Observer 无条件启动以支持 SPA 内导航；路径检查移到回调内部
+  function translateAttrs(el) {
+    for (const attr of ["title", "placeholder", "aria-label"]) {
+      const val = el.getAttribute(attr);
+      if (val && DESIGN_TRANSLATIONS[val]) {
+        el.setAttribute(attr, DESIGN_TRANSLATIONS[val]);
       }
     }
+  }
 
-    function translateNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const t = node.nodeValue && node.nodeValue.trim();
+  function translateNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.nodeValue && node.nodeValue.trim();
+      if (t && DESIGN_TRANSLATIONS[t]) {
+        node.nodeValue = node.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      translateAttrs(node);
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = walker.nextNode())) {
+        const t = n.nodeValue && n.nodeValue.trim();
         if (t && DESIGN_TRANSLATIONS[t]) {
-          node.nodeValue = node.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
+          n.nodeValue = n.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
         }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        translateAttrs(node);
-        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-        let n;
-        while ((n = walker.nextNode())) {
-          const t = n.nodeValue && n.nodeValue.trim();
-          if (t && DESIGN_TRANSLATIONS[t]) {
-            n.nodeValue = n.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
-          }
+      }
+      node.querySelectorAll("[title],[placeholder],[aria-label]").forEach(translateAttrs);
+    }
+  }
+
+  const designObserver = new MutationObserver((mutations) => {
+    if (!location.pathname.startsWith("/design")) return;
+    for (const m of mutations) {
+      if (m.type === "attributes" && m.target.nodeType === Node.ELEMENT_NODE) {
+        translateAttrs(m.target);
+      } else {
+        for (const node of m.addedNodes) {
+          translateNode(node);
         }
-        node.querySelectorAll("[title],[placeholder],[aria-label]").forEach(translateAttrs);
       }
     }
+  });
 
-    const designObserver = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.type === "attributes" && m.target.nodeType === Node.ELEMENT_NODE) {
-          translateAttrs(m.target);
-        } else {
-          for (const node of m.addedNodes) {
-            translateNode(node);
-          }
-        }
-      }
-    });
-
-    function initDesignTranslator() {
+  function initDesignTranslator() {
+    if (location.pathname.startsWith("/design")) {
       translateNode(document.body);
-      designObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["title", "placeholder", "aria-label"],
-      });
     }
+    designObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["title", "placeholder", "aria-label"],
+    });
+  }
 
-    if (document.body) {
-      initDesignTranslator();
-    } else {
-      document.addEventListener("DOMContentLoaded", initDesignTranslator);
-    }
+  if (document.body) {
+    initDesignTranslator();
+  } else {
+    document.addEventListener("DOMContentLoaded", initDesignTranslator);
   }
 
 })();
