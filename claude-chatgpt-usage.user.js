@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.3
+// @version      1.0.4
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -231,43 +231,25 @@
       if (!data || typeof data !== "object") return empty;
 
       const rateLimit = data.rate_limit ?? data.rateLimit ?? {};
-      const fiveHour = normalizeWindow(
+      const primaryWindow = normalizeWindow(
         rateLimit.primary_window ?? rateLimit.primaryWindow ?? data.primary,
         300,
       );
-      const sevenDay = normalizeWindow(
+      const secondaryWindow = normalizeWindow(
         rateLimit.secondary_window ?? rateLimit.secondaryWindow ?? data.secondary,
         10_080,
       );
-      const modelLimits = [];
-
-      const additionalRateLimits = Array.isArray(data.additional_rate_limits)
-        ? data.additional_rate_limits
-        : [];
-      for (const extra of additionalRateLimits) {
-        if (!extra || typeof extra !== "object") continue;
-        const name = stringValue(extra.limit_name ?? extra.metered_feature);
-        const extraRate = extra.rate_limit ?? extra.rateLimit ?? {};
-        for (const [suffix, raw, fallbackMinutes] of [
-          ["主窗口", extraRate.primary_window ?? extraRate.primaryWindow, 300],
-          ["次窗口", extraRate.secondary_window ?? extraRate.secondaryWindow, 10_080],
-        ]) {
-          const window = normalizeWindow(raw, fallbackMinutes);
-          if (window) {
-            modelLimits.push({
-              name: name ? `${name} · ${suffix}` : suffix,
-              modelName: name || "模型",
-              windowLabel: suffix,
-              ...window,
-            });
-          }
-        }
-      }
+      const weeklyWindow = [primaryWindow, secondaryWindow].find((window) => {
+        const minutes = Number(window?.window_minutes);
+        return Number.isFinite(minutes) && minutes >= 9_360 && minutes <= 10_800;
+      });
 
       const result = {
-        fiveHour,
-        sevenDay,
-        modelLimits,
+        // ChatGPT 网页端只把套餐共享的每周用量作为用户额度展示。
+        // additional_rate_limits 是内部模型计量项，不属于网页端额度维度。
+        fiveHour: null,
+        sevenDay: weeklyWindow ?? null,
+        modelLimits: [],
         planName: stringValue(data.plan_type ?? data.planType ?? data.plan),
       };
       return {
@@ -447,7 +429,7 @@
 
     const provider = isChatGPTSite ? "chatgpt" : "claude";
     const panelTitle =
-      provider === "chatgpt" ? "ChatGPT / Codex 用量" : "Claude 用量监控";
+      provider === "chatgpt" ? "ChatGPT 使用限制" : "Claude 用量监控";
     const positionStorageKey =
       provider === "chatgpt"
         ? "claude2cn-chatgpt-usage-position"
@@ -689,30 +671,6 @@
         : { modelName: legacyName || "模型", windowLabel: explicitWindow };
     }
 
-    function chatGPTBaseQuotaTitle(window, role) {
-      const minutes = Number(window?.window_minutes);
-      if (role === "secondary") {
-        if (minutes === 10_080) return "Codex 每周额度";
-        if (minutes === 43_200) return "Codex 每月额度";
-        return "Codex 长周期额度";
-      }
-      return Number.isFinite(minutes) && minutes <= 1440
-        ? "Codex 当前额度"
-        : "Codex 标准额度";
-    }
-
-    function chatGPTAdditionalQuotaTitle(modelName) {
-      const raw = String(modelName || "").trim();
-      if (/spark/i.test(raw)) return "Spark 独立额度";
-      const friendlyName = raw
-        .replace(/[_-]+/g, " ")
-        .replace(/\bgpt\b/gi, "GPT")
-        .replace(/\bcodex\b/gi, "Codex")
-        .replace(/\s+/g, " ")
-        .trim();
-      return `${friendlyName || "模型"} 独立额度`;
-    }
-
     function getUsageRows() {
       const rows = [];
       if (usageData.fiveHour) {
@@ -721,10 +679,7 @@
           "5小时窗口",
           "5h",
         );
-        const chatGPTTitle = chatGPTBaseQuotaTitle(
-          usageData.fiveHour,
-          "primary",
-        );
+        const chatGPTTitle = "每周使用限额";
         rows.push({
           key: "primary",
           icon: "⚡",
@@ -749,10 +704,7 @@
           "7天配额",
           "7d",
         );
-        const chatGPTTitle = chatGPTBaseQuotaTitle(
-          usageData.sevenDay,
-          "secondary",
-        );
+        const chatGPTTitle = "每周使用限额";
         rows.push({
           key: "secondary",
           icon: "📅",
@@ -774,29 +726,20 @@
       usageData.modelLimits.forEach((item, index) => {
         const labels = durationLabels(item, "模型配额", "模型");
         const { modelName, windowLabel } = splitLegacyModelName(item);
-        const isChatGPTModel = provider === "chatgpt";
-        const rowTitle = isChatGPTModel
-          ? chatGPTAdditionalQuotaTitle(modelName)
-          : modelName;
-        const meta = isChatGPTModel
-          ? compactDurationLabel(labels.label)
-          : [windowLabel, compactDurationLabel(labels.label)]
-              .filter(Boolean)
-              .join(" · ");
+        const rowTitle = modelName;
+        const meta = [windowLabel, compactDurationLabel(labels.label)]
+          .filter(Boolean)
+          .join(" · ");
         rows.push({
           key: `model-${index}`,
-          icon: isChatGPTModel ? "✦" : "🧠",
+          icon: "🧠",
           kind: "model",
           title: rowTitle,
           meta,
           label: [rowTitle, meta].filter(Boolean).join(" · "),
-          short: isChatGPTModel
-            ? /spark/i.test(modelName)
-              ? "Spark"
-              : rowTitle.replace(/\s*独立额度$/u, "").slice(0, 8)
-            : /^Fable 5$/i.test(modelName)
-              ? "Fable"
-              : modelName.slice(0, 8),
+          short: /^Fable 5$/i.test(modelName)
+            ? "Fable"
+            : modelName.slice(0, 8),
           ...item,
         });
       });

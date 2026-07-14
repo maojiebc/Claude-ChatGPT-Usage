@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-test("runs on chatgpt.com and renders Codex quota without Claude globals", async () => {
+test("runs on chatgpt.com and renders the weekly usage limit without Claude globals", async () => {
   const source = fs.readFileSync(
     path.join(__dirname, "..", "claude-chatgpt-usage.user.js"),
     "utf8",
@@ -142,16 +142,17 @@ test("runs on chatgpt.com and renders Codex quota without Claude globals", async
 
   const panel = elements.get("claude-usage-panel-bottom");
   assert.ok(panel, "usage panel should be mounted");
-  assert.equal(panel.title, "ChatGPT / Codex 用量");
-  assert.match(panel.innerHTML, /77%/);
+  assert.equal(panel.title, "ChatGPT 使用限制");
   assert.match(panel.innerHTML, /36%/);
   panel._listeners.get("mouseenter")();
   assert.equal(panel.style.width, "228px");
   assert.match(panel.innerHTML, /Pro Lite/);
-  assert.match(panel.innerHTML, /Codex 当前额度/);
-  assert.match(panel.innerHTML, /Codex 每周额度/);
-  assert.match(panel.innerHTML, /data-usage-heading="model"/);
-  assert.match(panel.innerHTML, /Spark 独立额度/);
-  assert.doesNotMatch(panel.innerHTML, /GPT-5\.3-Codex-Spark|主窗口/);
+  assert.match(panel.innerHTML, /每周使用限额/);
+  assert.doesNotMatch(panel.innerHTML, /Codex 当前额度|77%/);
+  assert.doesNotMatch(panel.innerHTML, /data-usage-heading="model"/);
+  assert.doesNotMatch(
+    panel.innerHTML,
+    /GPT-5\.3-Codex-Spark|Spark 独立额度|主窗口/,
+  );
   assert.match(panel.innerHTML, /text-overflow:ellipsis/);
 });

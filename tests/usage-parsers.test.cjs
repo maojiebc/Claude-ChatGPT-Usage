@@ -67,7 +67,7 @@ test("keeps compatibility with legacy top-level Fable fields", () => {
   assert.equal(parsed.modelLimits[0].utilization, 42.5);
 });
 
-test("parses ChatGPT Codex windows and additional model limits", () => {
+test("keeps only ChatGPT's user-facing weekly usage limit", () => {
   const parsed = parsers.parseChatGPT({
     plan_type: "plus",
     rate_limit: {
@@ -98,12 +98,37 @@ test("parses ChatGPT Codex windows and additional model limits", () => {
 
   assert.equal(parsed.hit, true);
   assert.equal(parsed.planName, "plus");
-  assert.equal(parsed.fiveHour.window_minutes, 300);
+  assert.equal(parsed.fiveHour, null);
   assert.equal(parsed.sevenDay.window_minutes, 10_080);
-  assert.equal(parsed.modelLimits[0].name, "GPT-5.5 · 主窗口");
-  assert.equal(parsed.modelLimits[0].modelName, "GPT-5.5");
-  assert.equal(parsed.modelLimits[0].windowLabel, "主窗口");
-  assert.equal(parsed.modelLimits[0].window_minutes, 1440);
+  assert.equal(parsed.modelLimits.length, 0);
+});
+
+test("finds a weekly ChatGPT limit in the primary window", () => {
+  const parsed = parsers.parseChatGPT({
+    rate_limit: {
+      primary_window: {
+        used_percent: 36,
+        reset_at: 1_784_500_000,
+        limit_window_seconds: 604_800,
+      },
+    },
+    additional_rate_limits: [
+      {
+        limit_name: "GPT-5.3-Codex-Spark",
+        rate_limit: {
+          primary_window: {
+            used_percent: 0,
+            reset_at: 1_784_600_000,
+            limit_window_seconds: 604_800,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(parsed.hit, true);
+  assert.equal(parsed.sevenDay.utilization, 36);
+  assert.equal(parsed.modelLimits.length, 0);
 });
 
 test("normalizes epoch seconds, milliseconds and ISO reset times", () => {
