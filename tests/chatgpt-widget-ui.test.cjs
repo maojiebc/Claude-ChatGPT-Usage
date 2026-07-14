@@ -49,8 +49,8 @@ test("ChatGPT compact card also surfaces the reset-credit count", () => {
     /function renderChatGPTCompactCredits\(\)[\s\S]*?\n    \}/,
   );
   assert.ok(fn, "compact credit renderer should exist");
-  // 复用胶囊行结构：label 用票券小图标（与 7d 缩写同列宽）+ 紫色 ×N；无卡时整行移除。
-  assert.match(fn[0], /claudeIcon\("ticket"\)/);
+  // 复用胶囊行结构：label 用生成的票券小图标（与 7d 缩写同列宽）+ 紫色 ×N；无卡时整行移除。
+  assert.match(fn[0], /generatedClaudeIcon\("resetCard"\)/);
   assert.match(fn[0], /`×\$\{credits\.availableCount\}`/);
   assert.match(fn[0], /#8b5cf6/);
   assert.match(fn[0], /row\?\.remove\(\)/);
@@ -62,7 +62,7 @@ test("ChatGPT compact card also surfaces the reset-credit count", () => {
 test("ChatGPT reset credits render as a dedicated block outside quota rows", () => {
   assert.match(source, /function renderChatGPTCredits\(\)/);
   assert.match(source, /credit-item/);
-  assert.match(source, /claudeIcon\("ticket"\)/);
+  assert.match(source, /generatedClaudeIcon\("resetCard", "generated-quota-icon"\)/);
   assert.match(source, /次可用/);
   assert.match(source, /最近到期/);
   // 重置卡容器独立于 quota-list，避免被额度行的增量清理误删。

@@ -62,6 +62,7 @@ test("Claude widget uses the generated icon asset set", () => {
     "refresh",
     "settings",
     "close",
+    "resetCard",
   ]) {
     assert.match(iconSource, new RegExp(`${name}: \\"data:image/png;base64,`));
   }

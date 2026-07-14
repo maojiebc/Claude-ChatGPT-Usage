@@ -6,14 +6,14 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.5.1
+// @version      1.5.2
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
 // @match        https://chatgpt.com/*
 // @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-design.user.js#sha256=19fefdebcb71584886bfa494aed0e54c4922860f01d9db367e838489ab8afb48
 // @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-translations.user.js#sha256=587a5de6adf25d5aa19f1e6f58b5bb6181f31e5d89e49669a3c75a85df8ff61a
-// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.4.3/claude-usage-icons.user.js#sha256=747e2dabba761d379e52323b7975843a6c8a5a852b7d61bac6bdb94065dbbd85
+// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.5.2/claude-usage-icons.user.js#sha256=9050bccec82b4413ce99420766796c0d6af2dd34aeafa9e49b38c3e169bbe6f5
 // @grant        none
 // @license      MIT
 // @run-at       document-start
@@ -1532,7 +1532,7 @@
         row.setAttribute("data-credit-row", "");
         // label 用票券小图标而非「重置」文字：与 5h/7d 缩写列同宽，
         // 保持收起卡两列网格的秩序感（2026-07-14 用户反馈）。
-        row.innerHTML = `<span class="compact-label" aria-hidden="true">${claudeIcon("ticket")}</span><strong class="compact-percent"></strong>`;
+        row.innerHTML = `<span class="compact-label" aria-hidden="true">${generatedClaudeIcon("resetCard")}</span><strong class="compact-percent"></strong>`;
       }
       row.style.setProperty(
         "--quota-color",
@@ -1559,7 +1559,7 @@
       if (!item) {
         creditList.innerHTML = `
           <article class="quota-item credit-item" aria-label="重置卡余量">
-            <div class="quota-meta"><span class="quota-icon" aria-hidden="true">${claudeIcon("ticket")}</span><span class="quota-name">重置卡</span><span class="quota-badge credit-count"></span></div>
+            <div class="quota-meta"><span class="quota-icon generated" aria-hidden="true">${generatedClaudeIcon("resetCard", "generated-quota-icon")}</span><span class="quota-name">重置卡</span><span class="quota-badge credit-count"></span></div>
             <div class="credit-note"><span>最近到期</span><span class="credit-expiry"></span></div>
           </article>`;
         item = creditList.querySelector(".credit-item");
