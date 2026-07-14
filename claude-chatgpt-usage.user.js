@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.1
+// @version      1.0.2
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -304,6 +304,143 @@
     return Object.freeze({ parseClaude, parseChatGPT, merge, toTimestampMs });
   })();
   // END USAGE_PARSERS
+
+  // BEGIN DYNAMIC_TRANSLATIONS — 处理包含姓名、百分比和日期的运行时文案。
+  const DynamicTranslations = (() => {
+    const greetings = {
+      morning: "早上好",
+      afternoon: "下午好",
+      evening: "晚上好",
+    };
+    const months = {
+      jan: 1,
+      january: 1,
+      feb: 2,
+      february: 2,
+      mar: 3,
+      march: 3,
+      apr: 4,
+      april: 4,
+      may: 5,
+      jun: 6,
+      june: 6,
+      jul: 7,
+      july: 7,
+      aug: 8,
+      august: 8,
+      sep: 9,
+      sept: 9,
+      september: 9,
+      oct: 10,
+      october: 10,
+      nov: 11,
+      november: 11,
+      dec: 12,
+      december: 12,
+    };
+    const relativeDays = {
+      today: "今天",
+      tomorrow: "明天",
+      monday: "周一",
+      tuesday: "周二",
+      wednesday: "周三",
+      thursday: "周四",
+      friday: "周五",
+      saturday: "周六",
+      sunday: "周日",
+    };
+
+    function formatClock(hourValue, minuteValue, meridiemValue) {
+      let hour = Number(hourValue);
+      const minute = Number(minuteValue || 0);
+      const meridiem = String(meridiemValue || "").toUpperCase();
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "";
+      if (meridiem === "AM" && hour === 12) hour = 0;
+      if (meridiem === "PM" && hour < 12) hour += 12;
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+
+    function formatResetTime(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+
+      const dateMatch = raw.match(
+        /^([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM))?$/i,
+      );
+      if (dateMatch) {
+        const month = months[dateMatch[1].toLowerCase()];
+        if (month) {
+          const year = dateMatch[3] ? `${dateMatch[3]}年` : "";
+          const clock = dateMatch[4]
+            ? ` ${formatClock(dateMatch[4], dateMatch[5], dateMatch[6])}`
+            : "";
+          return `${year}${month}月${Number(dateMatch[2])}日${clock}`;
+        }
+      }
+
+      const relativeMatch = raw.match(
+        /^(Today|Tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i,
+      );
+      if (relativeMatch) {
+        return `${relativeDays[relativeMatch[1].toLowerCase()]} ${formatClock(
+          relativeMatch[2],
+          relativeMatch[3],
+          relativeMatch[4],
+        )}`;
+      }
+
+      return raw
+        .replace(/\bat\b/gi, "")
+        .replace(/\bAM\b/gi, "上午")
+        .replace(/\bPM\b/gi, "下午")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+
+    function formatLimitName(value) {
+      const raw = String(value || "").trim();
+      const known = {
+        usage: "通用",
+        weekly: "每周",
+        session: "会话",
+        "extra usage": "额外用量",
+      };
+      return known[raw.toLowerCase()] || raw;
+    }
+
+    function translate(value) {
+      const text = String(value || "").trim();
+      if (!text) return text;
+
+      const greetingMatch = text.match(
+        /^(?:Good\s+)?(Morning|Afternoon|Evening),\s*(.*)$/i,
+      );
+      if (greetingMatch) {
+        const greeting = greetings[greetingMatch[1].toLowerCase()];
+        return `${greeting}，${greetingMatch[2]}`;
+      }
+
+      const usageMatch = text.match(
+        /^You(?:'|’)ve used\s+(\d+(?:\.\d+)?\s*%)\s+of your\s+(.+?)\s+limit(?:\s*[·∙•]\s*Resets\s+(.+))?$/i,
+      );
+      if (usageMatch) {
+        const percent = usageMatch[1].replace(/\s+/g, "");
+        const limitName = formatLimitName(usageMatch[2]);
+        const reset = usageMatch[3]
+          ? ` · 将于 ${formatResetTime(usageMatch[3])} 重置`
+          : "";
+        const usagePrefix = /[\u3400-\u9fff]/u.test(limitName)
+          ? `您已使用${limitName}额度的`
+          : `您已使用 ${limitName} 额度的`;
+        return `${usagePrefix} ${percent}${reset}`;
+      }
+
+      return text;
+    }
+
+    return Object.freeze({ formatResetTime, translate });
+  })();
+  // END DYNAMIC_TRANSLATIONS
 
   const ClaudeUsageWidget = (() => {
     "use strict";
@@ -1253,66 +1390,108 @@
   ClaudeUsageWidget.init();
 
   if (isClaudeSite) {
-    // Design 页面 DOM 翻译（/design 路径字符串打包在 JS bundle 中，无 i18n fetch 可拦截）
-    // Observer 无条件启动以支持 SPA 内导航；路径检查移到回调内部
+    // 动态首页文案通过 DOM 处理；Design 页面继续兼容打包在 JS bundle 中的静态字符串。
+    function isDesignPage() {
+      return location.pathname.startsWith("/design");
+    }
+
+    function shouldSkipTranslation(node) {
+      let element =
+        node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      while (element) {
+        const tagName = String(element.tagName || "").toUpperCase();
+        if (
+          ["SCRIPT", "STYLE", "TEXTAREA", "INPUT"].includes(tagName) ||
+          element.isContentEditable ||
+          element.getAttribute?.("contenteditable") === "true"
+        ) {
+          return true;
+        }
+        element = element.parentElement;
+      }
+      return false;
+    }
+
     function translateAttrs(el) {
-    for (const attr of ["title", "placeholder", "aria-label"]) {
-      const val = el.getAttribute(attr);
-      if (val && DESIGN_TRANSLATIONS[val]) {
-        el.setAttribute(attr, DESIGN_TRANSLATIONS[val]);
+      if (!isDesignPage()) return;
+      for (const attr of ["title", "placeholder", "aria-label"]) {
+        const val = el.getAttribute(attr);
+        if (val && DESIGN_TRANSLATIONS[val]) {
+          el.setAttribute(attr, DESIGN_TRANSLATIONS[val]);
+        }
       }
     }
-  }
+
+    function translateTextNode(node) {
+      if (shouldSkipTranslation(node)) return;
+      const raw = node.nodeValue;
+      const text = raw && raw.trim();
+      if (!text) return;
+
+      const dynamicTranslation = DynamicTranslations.translate(text);
+      if (dynamicTranslation !== text) {
+        node.nodeValue = raw.replace(text, dynamicTranslation);
+        return;
+      }
+
+      if (isDesignPage() && DESIGN_TRANSLATIONS[text]) {
+        node.nodeValue = raw.replace(text, DESIGN_TRANSLATIONS[text]);
+      }
+    }
 
     function translateNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const t = node.nodeValue && node.nodeValue.trim();
-      if (t && DESIGN_TRANSLATIONS[t]) {
-        node.nodeValue = node.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
-      }
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      translateAttrs(node);
-      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-      let n;
-      while ((n = walker.nextNode())) {
-        const t = n.nodeValue && n.nodeValue.trim();
-        if (t && DESIGN_TRANSLATIONS[t]) {
-          n.nodeValue = n.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
+      if (node.nodeType === Node.TEXT_NODE) {
+        translateTextNode(node);
+      } else if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        !shouldSkipTranslation(node)
+      ) {
+        translateAttrs(node);
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        let textNode;
+        while ((textNode = walker.nextNode())) {
+          translateTextNode(textNode);
         }
-      }
-      node.querySelectorAll("[title],[placeholder],[aria-label]").forEach(translateAttrs);
-    }
-  }
-
-    const designObserver = new MutationObserver((mutations) => {
-    if (!location.pathname.startsWith("/design")) return;
-    for (const m of mutations) {
-      if (m.type === "attributes" && m.target.nodeType === Node.ELEMENT_NODE) {
-        translateAttrs(m.target);
-      } else {
-        for (const node of m.addedNodes) {
-          translateNode(node);
+        if (isDesignPage()) {
+          node
+            .querySelectorAll("[title],[placeholder],[aria-label]")
+            .forEach(translateAttrs);
         }
       }
     }
-  });
 
-    function initDesignTranslator() {
-    if (location.pathname.startsWith("/design")) {
-      translateNode(document.body);
-    }
-    designObserver.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["title", "placeholder", "aria-label"],
+    const claudeDomObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === "characterData") {
+          translateTextNode(mutation.target);
+        } else if (
+          mutation.type === "attributes" &&
+          mutation.target.nodeType === Node.ELEMENT_NODE
+        ) {
+          translateAttrs(mutation.target);
+        } else {
+          for (const node of mutation.addedNodes) {
+            translateNode(node);
+          }
+        }
+      }
     });
-  }
+
+    function initClaudeDomTranslator() {
+      translateNode(document.body);
+      claudeDomObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["title", "placeholder", "aria-label"],
+      });
+    }
 
     if (document.body) {
-      initDesignTranslator();
+      initClaudeDomTranslator();
     } else {
-      document.addEventListener("DOMContentLoaded", initDesignTranslator);
+      document.addEventListener("DOMContentLoaded", initClaudeDomTranslator);
     }
   }
 
