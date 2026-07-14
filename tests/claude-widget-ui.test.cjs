@@ -100,8 +100,16 @@ test("Claude expanded view exposes reset time, settings, and recovery controls",
 
 test("Claude refresh updates existing quota nodes instead of rebuilding the root", () => {
   const renderSource = source.match(
-    /function renderClaudePanel\(\)[\s\S]*?function applyTheme/,
+    /function renderClaudePanel\(\)[\s\S]*?function getChatGPTViewRows/,
   )[0];
   assert.doesNotMatch(renderSource, /innerHTML\s*=/);
-  assert.match(renderSource, /updateClaudeQuotaNodes\(rows\)/);
+  assert.match(renderSource, /updateQuotaNodes\(claudeShadow, rows/);
+});
+
+test("both widgets share one style layer and quota-node updater", () => {
+  assert.match(source, /function widgetSharedStyles\(\)/);
+  assert.match(source, /function updateQuotaNodes\(shadow, rows/);
+  // 两个面板都从共享层取样式，避免双份 CSS 漂移。
+  const sharedCalls = source.match(/\$\{widgetSharedStyles\(\)\}/g) || [];
+  assert.equal(sharedCalls.length, 2);
 });

@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.2.0
+// @version      1.3.0
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -498,6 +498,7 @@
     let isHovered = false;
     let panel = null;
     let claudeShadow = null;
+    let chatgptShadow = null;
     let claudeWidgetState = "collapsed";
     let claudeAutoCollapseTimer = null;
     let claudeDocumentClickHandler = null;
@@ -593,30 +594,90 @@
 
     function createPanel() {
       if (provider === "claude") return createClaudePanel();
-      const metrics = getPanelMetrics();
-      panel = document.createElement("div");
-      panel.id = "claude-usage-panel-bottom";
-      Object.assign(panel.style, {
-        position: "fixed",
-        top: "50px",
-        right: metrics.defaultRight + "px",
-        zIndex: "1000",
-        background: "rgb(254, 252, 245)",
-        border: "1px solid rgb(240, 235, 225)",
-        borderRadius: metrics.borderRadius,
-        boxSizing: "border-box",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "rgb(80, 75, 65)",
-        padding: metrics.padding,
-        width: "auto",
-        minWidth: metrics.minWidth + "px",
-        userSelect: "none",
-        boxShadow: "none",
-        cursor: "move",
-        transition: "all 0.2s ease",
-        touchAction: "none",
-      });
-      return panel;
+      return createChatGPTPanel();
+    }
+
+    function createChatGPTPanel() {
+      const host = document.createElement("div");
+      host.id = "claude-usage-panel-bottom";
+      host.setAttribute("data-chatgpt-usage-widget", "v3");
+      host.title = panelTitle;
+      chatgptShadow = host.attachShadow({ mode: "open" });
+      chatgptShadow.innerHTML = `
+        <style>
+          ${widgetSharedStyles()}
+          /* ChatGPT 面板：位置由拖动逻辑内联管理，浮窗整体可拖拽 */
+          :host { touch-action: none; cursor: move; }
+          .compact-card { cursor: move; }
+          .title-badge {
+            background: linear-gradient(135deg, #1fc39a, #0d8a6a);
+            box-shadow: 0 2px 6px rgba(16, 163, 127, 0.35);
+          }
+          .plan-badge { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+          .credit-list { flex: 0 0 auto; border-top: 1px solid var(--cu-divider); }
+          .credit-item .quota-meta { margin-bottom: 0; }
+          .credit-note {
+            margin: 8px 0 0 36px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--cu-text-tertiary);
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+          }
+        </style>
+        <div class="usage-widget" data-state="collapsed">
+          <button class="compact-card" type="button" data-action="expand" aria-label="展开 ChatGPT 用量详情">
+            <span class="compact-list"></span>
+            <span class="compact-status">正在获取额度…</span>
+          </button>
+          <section class="expanded-card is-off" aria-label="ChatGPT 用量详情">
+            <header class="widget-header">
+              <div class="widget-title"><span class="title-badge">${claudeIcon("boltFilled")}</span><span>ChatGPT 用量</span></div>
+              <span class="quota-badge plan-badge" hidden></span>
+            </header>
+            <div class="quota-list"></div>
+            <div class="expanded-status">正在获取额度…</div>
+            <div class="credit-list" hidden></div>
+            <footer class="widget-footer">
+              <span class="reset-time">${claudeIcon("refresh")}<span>重置时间：</span><time>--/-- -- --:--</time></span>
+            </footer>
+          </section>
+        </div>`;
+      panel = host;
+      host.style.top = "50px";
+      host.style.right = getPanelMetrics().defaultRight + "px";
+      const compact = chatgptShadow.querySelector('[data-action="expand"]');
+      compact.addEventListener("click", () => setChatGPTWidgetState(true));
+      return host;
+    }
+
+    function setChatGPTWidgetState(expanded) {
+      if (!chatgptShadow || !panel) return;
+      if (Boolean(expanded) === isHovered) return;
+      isHovered = Boolean(expanded);
+      const widget = chatgptShadow.querySelector(".usage-widget");
+      widget.dataset.state = isHovered ? "expanded" : "collapsed";
+      chatgptShadow
+        .querySelector(".compact-card")
+        .classList.toggle("is-off", isHovered);
+      chatgptShadow
+        .querySelector(".expanded-card")
+        .classList.toggle("is-off", !isHovered);
+      // 靠左停靠时展开卡向右生长，夹紧防止越出屏幕右缘；拖动中由拖动逻辑管定位。
+      if (
+        !isDragging &&
+        savedPosition.isRight === false &&
+        savedPosition.left !== null
+      ) {
+        const width = isHovered
+          ? getPanelMetrics().expandedWidth
+          : getPanelMetrics().collapsedWidth;
+        const maxLeft = Math.max(0, window.innerWidth - width - 8);
+        panel.style.left = Math.min(savedPosition.left, maxLeft) + "px";
+        panel.style.right = "auto";
+      }
     }
 
     function loadClaudeSettings() {
@@ -675,6 +736,8 @@
           '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M4 11h16"/>',
         sparkles:
           '<path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z"/><path d="M16 6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z"/><path d="M9 18a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/>',
+        ticket:
+          '<path d="M15 5l0 2"/><path d="M15 11l0 2"/><path d="M15 17l0 2"/><path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-3a2 2 0 0 0 0 -4v-3a2 2 0 0 1 2 -2"/>',
         close: '<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>',
         refresh:
           '<path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>',
@@ -691,17 +754,10 @@
       model: "sparkles",
     };
 
-    function createClaudePanel() {
-      claudeSettings = loadClaudeSettings();
-      // 窄视口（<900px）一律从收起态开始，避免展开卡遮挡正文。
-      claudeWidgetState =
-        window.innerWidth < 900 ? "collapsed" : claudeSettings.lastVisibleState;
-      const host = document.createElement("div");
-      host.id = "claude-usage-panel-bottom";
-      host.setAttribute("data-claude-usage-widget", "v2");
-      claudeShadow = host.attachShadow({ mode: "open" });
-      claudeShadow.innerHTML = `
-        <style>
+    // Claude 与 ChatGPT 浮窗共用的设计语言：变量、明暗主题、收起/展开卡片、
+    // 额度条目、过渡动画。各自的定位与专属控件在 create*Panel 里追加。
+    function widgetSharedStyles() {
+      return `
           :host {
             --cu-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
             --cu-bg: rgba(255, 255, 255, 0.96);
@@ -715,8 +771,6 @@
             --cu-danger: #ef493d;
             --cu-transition: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
             position: fixed;
-            top: 96px;
-            right: 12px;
             z-index: 2147483000;
             color: var(--cu-text);
             font-family: var(--cu-font);
@@ -756,12 +810,6 @@
             pointer-events: none;
             transform: scale(0.96) translateY(-6px);
             transition: opacity var(--cu-transition), transform var(--cu-transition), visibility 0s linear 200ms;
-          }
-          :host([data-anchor="bottom"]) .compact-card, :host([data-anchor="bottom"]) .expanded-card { transform-origin: bottom right; }
-          :host([data-anchor="bottom"]) .compact-card.is-off, :host([data-anchor="bottom"]) .expanded-card.is-off {
-            top: auto;
-            bottom: 0;
-            transform: scale(0.96) translateY(6px);
           }
           .compact-card {
             width: 104px;
@@ -817,7 +865,6 @@
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid var(--cu-divider);
-            cursor: pointer;
           }
           .widget-title { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
           .title-badge {
@@ -826,9 +873,7 @@
             display: grid;
             place-items: center;
             border-radius: 7px;
-            background: linear-gradient(135deg, #ff8a5c, #ff5f2e);
             color: #fff;
-            box-shadow: 0 2px 6px rgba(255, 95, 46, 0.35);
           }
           .title-badge svg { width: 13px; height: 13px; }
           .icon-button {
@@ -844,6 +889,14 @@
             cursor: pointer;
           }
           .icon-button:hover { background: var(--cu-bg-soft); color: var(--cu-text); }
+          .quota-badge {
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            color: var(--cu-text-secondary);
+            background: var(--cu-bg-soft);
+            white-space: nowrap;
+          }
           .quota-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0 5px; }
           .quota-item { padding: 13px 16px 14px; }
           .quota-meta {
@@ -893,6 +946,51 @@
           .reset-time { min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
           .reset-time svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--cu-text-tertiary); }
           .reset-time time { font-variant-numeric: tabular-nums; color: var(--cu-text-secondary); }
+          .usage-tooltip {
+            position: absolute;
+            right: calc(100% + 8px);
+            z-index: 3;
+            width: max-content;
+            max-width: 250px;
+            padding: 8px 10px;
+            border: 1px solid var(--cu-border);
+            border-radius: 9px;
+            background: var(--cu-bg);
+            box-shadow: var(--cu-shadow);
+            color: var(--cu-text-secondary);
+            font-size: 11px;
+            line-height: 1.55;
+            pointer-events: none;
+            white-space: normal;
+          }
+          @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
+      `;
+    }
+
+    function createClaudePanel() {
+      claudeSettings = loadClaudeSettings();
+      // 窄视口（<900px）一律从收起态开始，避免展开卡遮挡正文。
+      claudeWidgetState =
+        window.innerWidth < 900 ? "collapsed" : claudeSettings.lastVisibleState;
+      const host = document.createElement("div");
+      host.id = "claude-usage-panel-bottom";
+      host.setAttribute("data-claude-usage-widget", "v2");
+      claudeShadow = host.attachShadow({ mode: "open" });
+      claudeShadow.innerHTML = `
+        <style>
+          ${widgetSharedStyles()}
+          :host { top: 96px; right: 12px; }
+          :host([data-anchor="bottom"]) .compact-card, :host([data-anchor="bottom"]) .expanded-card { transform-origin: bottom right; }
+          :host([data-anchor="bottom"]) .compact-card.is-off, :host([data-anchor="bottom"]) .expanded-card.is-off {
+            top: auto;
+            bottom: 0;
+            transform: scale(0.96) translateY(6px);
+          }
+          .widget-header { cursor: pointer; }
+          .title-badge {
+            background: linear-gradient(135deg, #ff8a5c, #ff5f2e);
+            box-shadow: 0 2px 6px rgba(255, 95, 46, 0.35);
+          }
           .settings-popover {
             position: absolute;
             top: 60px;
@@ -920,25 +1018,7 @@
           .setting-control { min-width: 76px; accent-color: #4285f4; }
           .setting-row select { padding: 4px 7px; border: 1px solid var(--cu-border); border-radius: 7px; background: var(--cu-bg-soft); color: var(--cu-text); }
           .reset-settings { width: 100%; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--cu-border); border-radius: 9px; background: var(--cu-bg-soft); color: var(--cu-text-secondary); cursor: pointer; }
-          .usage-tooltip {
-            position: absolute;
-            right: calc(100% + 8px);
-            z-index: 3;
-            width: max-content;
-            max-width: 250px;
-            padding: 8px 10px;
-            border: 1px solid var(--cu-border);
-            border-radius: 9px;
-            background: var(--cu-bg);
-            box-shadow: var(--cu-shadow);
-            color: var(--cu-text-secondary);
-            font-size: 11px;
-            line-height: 1.55;
-            pointer-events: none;
-            white-space: normal;
-          }
           @media (max-width: 640px) { :host { display: none; } }
-          @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
         </style>
         <div class="usage-widget" data-state="collapsed">
           <button class="compact-card" type="button" data-action="expand" aria-label="展开 Claude 用量详情">
@@ -1221,22 +1301,23 @@
         });
     }
 
-    function showClaudeTooltip(element) {
-      const tooltip = claudeShadow?.querySelector(".usage-tooltip");
+    function showWidgetTooltip(shadow, element) {
+      const tooltip = shadow?.querySelector(".usage-tooltip");
       if (!tooltip || !element?.dataset.tooltip) return;
       tooltip.textContent = element.dataset.tooltip;
       tooltip.style.top = `${element.offsetTop}px`;
       tooltip.hidden = false;
     }
 
-    function hideClaudeTooltip() {
-      const tooltip = claudeShadow?.querySelector(".usage-tooltip");
+    function hideWidgetTooltip(shadow) {
+      const tooltip = shadow?.querySelector(".usage-tooltip");
       if (tooltip) tooltip.hidden = true;
     }
 
-    function updateClaudeQuotaNodes(rows) {
-      const compactList = claudeShadow.querySelector(".compact-list");
-      const quotaList = claudeShadow.querySelector(".quota-list");
+    // Claude / ChatGPT 浮窗共用的额度节点增量更新：只改既有 DOM，不重建根。
+    function updateQuotaNodes(shadow, rows, { withTooltip = false } = {}) {
+      const compactList = shadow.querySelector(".compact-list");
+      const quotaList = shadow.querySelector(".quota-list");
       const activeKeys = new Set(rows.map((row) => row.key));
       for (const element of [
         ...compactList.querySelectorAll("[data-quota-key]"),
@@ -1255,10 +1336,14 @@
           compactRow.dataset.quotaKey = row.key;
           compactRow.innerHTML =
             '<span class="compact-label"></span><strong class="compact-percent"></strong>';
-          compactRow.addEventListener("mouseenter", () =>
-            showClaudeTooltip(compactRow),
-          );
-          compactRow.addEventListener("mouseleave", hideClaudeTooltip);
+          if (withTooltip) {
+            compactRow.addEventListener("mouseenter", () =>
+              showWidgetTooltip(shadow, compactRow),
+            );
+            compactRow.addEventListener("mouseleave", () =>
+              hideWidgetTooltip(shadow),
+            );
+          }
           compactList.appendChild(compactRow);
         }
         compactRow.style.setProperty("--quota-color", row.color);
@@ -1279,7 +1364,7 @@
           quotaItem.className = "quota-item";
           quotaItem.dataset.quotaKey = row.key;
           quotaItem.innerHTML = `
-            <div class="quota-meta"><span class="quota-icon" aria-hidden="true">${claudeIcon(claudeQuotaIcons[row.type] || "sparkles")}</span><span class="quota-name"></span><span class="quota-remaining"></span></div>
+            <div class="quota-meta"><span class="quota-icon" aria-hidden="true">${claudeIcon(row.iconName || claudeQuotaIcons[row.type] || "sparkles")}</span><span class="quota-name"></span><span class="quota-remaining"></span></div>
             <div class="quota-value-row"><div class="quota-track" aria-hidden="true"><div class="quota-fill"></div></div><strong class="quota-percent"></strong></div>`;
           quotaList.appendChild(quotaItem);
         }
@@ -1314,7 +1399,7 @@
         : "正在获取额度…";
 
       if (rows.length) {
-        updateClaudeQuotaNodes(rows);
+        updateQuotaNodes(claudeShadow, rows, { withTooltip: true });
         compactList.hidden = false;
         compactStatus.hidden = true;
         quotaList.hidden = false;
@@ -1341,43 +1426,119 @@
       applyClaudePosition();
     }
 
+    function getChatGPTViewRows() {
+      return getUsageRows().map((row) => {
+        const used = pct(row.utilization);
+        const remaining = 100 - used;
+        const isWeekly = row.key === "primary" || row.key === "secondary";
+        const type = isWeekly ? "weekly" : "model";
+        const baseColors = {
+          weekly: ["#10a37f", "rgba(16, 163, 127, 0.12)"],
+          model: ["#4285f4", "rgba(66, 133, 244, 0.10)"],
+        };
+        const [baseColor, baseSoft] = baseColors[type];
+        const isDanger = remaining <= 20;
+        const countdown = cdText(row.resets_at);
+        return {
+          ...row,
+          type,
+          iconName: isWeekly ? "calendar" : "sparkles",
+          shortLabel: isWeekly ? row.short || "7d" : row.short,
+          fullLabel: isWeekly ? "每周使用限额" : row.title || row.label,
+          remaining,
+          critical: remaining <= 10,
+          remainingText: countdown ? `${countdown} 剩余` : "剩余时间待定",
+          resetText: fmtExpiryTime(row.resets_at),
+          color: isDanger ? "#ef493d" : baseColor,
+          softColor: isDanger ? "rgba(239, 73, 61, 0.10)" : baseSoft,
+        };
+      });
+    }
+
+    function renderChatGPTCredits() {
+      const creditList = chatgptShadow.querySelector(".credit-list");
+      const credits = usageData.resetCredits;
+      if (!credits) {
+        creditList.hidden = true;
+        creditList.innerHTML = "";
+        return;
+      }
+      let item = creditList.querySelector(".credit-item");
+      if (!item) {
+        creditList.innerHTML = `
+          <article class="quota-item credit-item" aria-label="重置卡余量">
+            <div class="quota-meta"><span class="quota-icon" aria-hidden="true">${claudeIcon("ticket")}</span><span class="quota-name">重置卡</span><span class="quota-badge credit-count"></span></div>
+            <div class="credit-note"><span>最近到期</span><span class="credit-expiry"></span></div>
+          </article>`;
+        item = creditList.querySelector(".credit-item");
+        item.style.setProperty("--quota-color", "#8b5cf6");
+        item.style.setProperty("--quota-soft", "rgba(139, 92, 246, 0.12)");
+      }
+      item.querySelector(".credit-count").textContent =
+        `${credits.availableCount} 次可用`;
+      item.querySelector(".credit-expiry").textContent = fmtExpiryTime(
+        credits.nearestExpiresAt,
+      );
+      creditList.hidden = false;
+    }
+
+    function renderChatGPTPanel() {
+      if (!chatgptShadow || !panel) return;
+      const rows = getChatGPTViewRows();
+      const compactList = chatgptShadow.querySelector(".compact-list");
+      const compactStatus = chatgptShadow.querySelector(".compact-status");
+      const quotaList = chatgptShadow.querySelector(".quota-list");
+      const expandedStatus = chatgptShadow.querySelector(".expanded-status");
+      const statusText = usageData.fetchError
+        ? usageData.fetchError
+        : "正在获取额度…";
+
+      if (rows.length) {
+        updateQuotaNodes(chatgptShadow, rows);
+        compactList.hidden = false;
+        compactStatus.hidden = true;
+        quotaList.hidden = false;
+        expandedStatus.hidden = true;
+      } else {
+        compactList.hidden = true;
+        compactStatus.hidden = false;
+        compactStatus.textContent = usageData.fetchError
+          ? "获取失败"
+          : "正在获取…";
+        compactStatus.title = statusText;
+        quotaList.hidden = true;
+        expandedStatus.hidden = false;
+        expandedStatus.textContent = statusText;
+      }
+
+      renderChatGPTCredits();
+
+      const planBadge = chatgptShadow.querySelector(".plan-badge");
+      const planName = formatPlanName(usageData.planName);
+      planBadge.hidden = !planName;
+      planBadge.textContent = planName;
+      planBadge.title = planName;
+
+      const resetAt =
+        usageData.sevenDay?.resets_at ??
+        usageData.fiveHour?.resets_at ??
+        rows[0]?.resets_at ??
+        null;
+      chatgptShadow.querySelector(".reset-time time").textContent =
+        fmtExpiryTime(resetAt);
+    }
+
     function applyTheme() {
       if (!panel) return;
       const isDark =
         document.documentElement.classList.contains("dark") ||
         document.documentElement.getAttribute("data-theme") === "dark" ||
         window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-      if (provider === "claude") {
-        panel.setAttribute("data-theme", isDark ? "dark" : "light");
-        return;
-      }
-
-      if (isDark) {
-        Object.assign(panel.style, {
-          background: "rgb(40, 38, 35)",
-          borderColor: "rgb(60, 55, 50)",
-          color: "rgb(200, 195, 185)",
-        });
-      } else {
-        Object.assign(panel.style, {
-          background: "rgb(254, 252, 245)",
-          borderColor: "rgb(240, 235, 225)",
-          color: "rgb(80, 75, 65)",
-        });
-      }
+      panel.setAttribute("data-theme", isDark ? "dark" : "light");
     }
 
     function pct(v) {
       return Math.min(100, Math.max(0, Math.round(v || 0)));
-    }
-
-    function clr(p) {
-      return p < 60 ? "#10b981" : p < 85 ? "#f59e0b" : "#ef4444";
-    }
-
-    function clrDark(p) {
-      return p < 60 ? "#34d399" : p < 85 ? "#fbbf24" : "#f87171";
     }
 
     function cdText(ts) {
@@ -1390,20 +1551,6 @@
       return h > 0 ? `${h}h ${m}m` : `${m}m`;
     }
 
-    function fmtTime(ts) {
-      const timestamp = UsageParsers.toTimestampMs(ts);
-      if (timestamp === null) return "—";
-      const d = new Date(timestamp);
-      if (isNaN(d.getTime())) return "—";
-      return d.toLocaleString("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-    }
-
     function fmtExpiryTime(ts) {
       const timestamp = UsageParsers.toTimestampMs(ts);
       if (timestamp === null) return "暂无到期时间";
@@ -1412,20 +1559,6 @@
       const pad = (value) => String(value).padStart(2, "0");
       const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
       return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${weekdays[date.getDay()]} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? "").replace(
-        /[&<>'"]/g,
-        (char) =>
-          ({
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            "'": "&#39;",
-            '"': "&quot;",
-          })[char],
-      );
     }
 
     function durationLabels(window, fallbackLabel, fallbackShort) {
@@ -1555,24 +1688,11 @@
     }
 
     function getPanelMetrics() {
-      const expandedWidth = provider === "chatgpt" ? 228 : 200;
-      if (isMobileLayout()) {
-        return {
-          defaultRight: null,
-          collapsedWidth: 32,
-          expandedWidth: Math.min(expandedWidth, window.innerWidth - 16),
-          minWidth: 32,
-          padding: "3px 2px",
-          borderRadius: "4px",
-        };
-      }
+      // 与共享设计语言一致：收起卡 104px、展开卡 304px（CSS 内已按视口收窄）。
       return {
         defaultRight: 8,
-        collapsedWidth: 56,
-        expandedWidth,
-        minWidth: 56,
-        padding: "8px 10px",
-        borderRadius: "6px",
+        collapsedWidth: 104,
+        expandedWidth: Math.min(304, window.innerWidth - 24),
       };
     }
 
@@ -1590,219 +1710,24 @@
         !document.getElementById("claude-usage-panel-bottom")
       )
         return;
-      if (provider === "claude") {
-        applyTheme();
-        renderClaudePanel();
-        startCountdown();
-        return;
-      }
       applyTheme();
-
-      if ((provider === "claude" && !orgId) || (!usageData.lastFetch && !usageData.fetchError)) {
-        panel.title = `${panelTitle}：正在获取`;
-        panel.innerHTML = `
-        <div style="font-size:10px;opacity:0.6;text-align:center;">
-          ⏳
-        </div>`;
-        return;
-      }
-
-      if (usageData.fetchError) {
-        panel.title = usageData.fetchError;
-        panel.innerHTML = `
-        <div style="font-size:12px;opacity:0.7;text-align:center;">⚠️</div>`;
-        return;
-      }
-
-      panel.title = panelTitle;
-      const rows = getUsageRows();
-      if (!rows.length) {
-        panel.innerHTML = `<div style="font-size:10px;opacity:0.6;text-align:center;">暂无额度</div>`;
-        return;
-      }
-
-      const isDark =
-        document.documentElement.classList.contains("dark") ||
-        document.documentElement.getAttribute("data-theme") === "dark" ||
-        window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const isMobile = isMobileLayout();
-
-      const textMuted = isDark
-        ? "rgba(200, 195, 185, 0.6)"
-        : "rgba(80, 75, 65, 0.6)";
-      const dividerColor = isDark
-        ? "rgba(200, 195, 185, 0.16)"
-        : "rgba(80, 75, 65, 0.14)";
-      const badgeBackground = isDark
-        ? "rgba(255, 255, 255, 0.04)"
-        : "rgba(80, 75, 65, 0.04)";
-      const metrics = getPanelMetrics();
-
-      // 判断面板是否靠近右侧
-      const rect = panel.getBoundingClientRect();
-      const isNearRight =
-        savedPosition.isRight !== null
-          ? savedPosition.isRight
-          : rect.left > window.innerWidth / 2;
-
-      // 使用保存的位置或当前位置
-      let currentLeft, currentRight;
-      if (isNearRight) {
-        currentRight =
-          savedPosition.right !== null
-            ? savedPosition.right
-            : window.innerWidth - rect.right;
+      if (provider === "claude") {
+        renderClaudePanel();
       } else {
-        currentLeft =
-          savedPosition.left !== null ? savedPosition.left : rect.left;
+        renderChatGPTPanel();
       }
-      const currentTop =
-        savedPosition.top !== null ? savedPosition.top : rect.top;
-
-      if (isHovered) {
-        const expandedWidth = metrics.expandedWidth;
-
-        panel.style.top = currentTop + "px";
-        panel.style.bottom = "auto";
-        panel.style.padding = metrics.padding;
-        panel.style.borderRadius = metrics.borderRadius;
-
-        if (isNearRight) {
-          // 靠右时向左展开，保持右边缘不变
-          panel.style.right = Math.max(0, currentRight) + "px";
-          panel.style.left = "auto";
-        } else {
-          // 靠左时向右展开，保持左边缘不变
-          const maxLeft = Math.max(0, window.innerWidth - expandedWidth);
-          panel.style.left = Math.max(0, Math.min(currentLeft, maxLeft)) + "px";
-          panel.style.right = "auto";
-        }
-
-        panel.style.width = expandedWidth + "px";
-        panel.style.minWidth = expandedWidth + "px";
-
-        const planName = formatPlanName(usageData.planName);
-        const plan = planName
-          ? `<div style="font-size:8px;color:${textMuted};margin-top:3px;letter-spacing:0.02em;">${escapeHtml(planName)}</div>`
-          : "";
-        const expandedRows = rows
-          .map((row, index) => {
-            const used = pct(row.utilization);
-            const remain = 100 - used;
-            const color = isDark ? clrDark(used) : clr(used);
-            const rowTitle = row.title || row.label;
-            const rowHeading = row.meta
-              ? `<div data-usage-heading="${row.kind === "model" ? "model" : "quota"}" title="${escapeHtml(row.label)}" style="display:flex;align-items:center;gap:5px;min-width:0;margin-bottom:5px;">
-                  <div style="display:flex;align-items:center;gap:4px;min-width:0;flex:1 1 auto;">
-                    <span aria-hidden="true" style="flex:0 0 auto;">${row.icon}</span>
-                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;font-weight:600;opacity:0.72;">${escapeHtml(rowTitle)}</span>
-                  </div>
-                  <span style="flex:0 0 auto;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7px;line-height:1.45;color:${textMuted};background:${badgeBackground};border:1px solid ${dividerColor};border-radius:999px;padding:1px 5px;">${escapeHtml(row.meta)}</span>
-                </div>`
-              : `<div style="font-size:9px;color:${textMuted};margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(row.label)}">${row.icon} ${escapeHtml(rowTitle)}</div>`;
-            const rowDivider = index
-              ? `border-top:1px solid ${dividerColor};margin-top:8px;padding-top:8px;`
-              : "";
-            return `
-          <div data-usage-row="${escapeHtml(row.key)}" style="${rowDivider}">
-            ${rowHeading}
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
-              <span style="font-size:11px;opacity:0.7;">剩余</span>
-              <span style="font-size:16px;font-weight:600;color:${color};">${remain}%</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:8px;opacity:0.6;">
-              <span>已用 ${used}%</span>
-              <span>${fmtTime(row.resets_at)}</span>
-            </div>
-            <div data-usage-countdown="${index}" style="font-size:8px;color:${color};margin-top:2px;text-align:right;">${cdText(row.resets_at)}</div>
-          </div>`;
-          })
-          .join("");
-        const resetCredits = usageData.resetCredits;
-        const resetCreditsExpanded =
-          provider === "chatgpt" && resetCredits
-            ? `<div data-reset-credit-summary style="border-top:1px solid ${dividerColor};margin-top:8px;padding-top:8px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                  <span style="font-size:9px;font-weight:600;opacity:0.72;">重置卡</span>
-                  <span style="font-size:8px;color:${textMuted};background:${badgeBackground};border:1px solid ${dividerColor};border-radius:999px;padding:1px 6px;white-space:nowrap;">${resetCredits.availableCount} 次可用</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:8px;color:${textMuted};">
-                  <span>最近到期</span>
-                  <span style="text-align:right;white-space:nowrap;">${escapeHtml(fmtExpiryTime(resetCredits.nearestExpiresAt))}</span>
-                </div>
-              </div>`
-            : "";
-
-        panel.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:0;">
-          <div style="font-size:11px;font-weight:600;opacity:0.8;text-align:center;border-bottom:1px solid ${textMuted};padding-bottom:6px;margin-bottom:10px;">${escapeHtml(panelTitle)}${plan}</div>
-          ${expandedRows}
-          ${resetCreditsExpanded}
-        </div>
-      `;
-      } else {
-        const collapsedWidth = metrics.collapsedWidth;
-        panel.style.padding = metrics.padding;
-        panel.style.borderRadius = metrics.borderRadius;
-        panel.style.top = currentTop + "px";
-        panel.style.bottom = "auto";
-
-        if (isNearRight) {
-          // 靠右时保持右对齐收起
-          panel.style.right = Math.max(0, currentRight) + "px";
-          panel.style.left = "auto";
-        } else {
-          // 靠左时保持左对齐收起
-          const maxLeft = Math.max(0, window.innerWidth - collapsedWidth);
-          panel.style.left = Math.max(0, Math.min(currentLeft, maxLeft)) + "px";
-          panel.style.right = "auto";
-        }
-
-        panel.style.width = collapsedWidth + "px";
-        panel.style.minWidth = collapsedWidth + "px";
-
-        const collapsedRows = rows
-          .map((row, index) => {
-            const used = pct(row.utilization);
-            const remain = 100 - used;
-            const color = isDark ? clrDark(used) : clr(used);
-            const divider =
-              index === rows.length - 1
-                ? ""
-                : `<div style="width:${isMobile ? 14 : 30}px;height:1px;background:${textMuted};opacity:0.3;"></div>`;
-            return `
-          <div style="text-align:center;">
-            <div style="font-size:${isMobile ? 7 : 8}px;color:${textMuted};margin-bottom:2px;max-width:${collapsedWidth - 4}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(row.short)}</div>
-            <div style="font-size:${isMobile ? 11 : 16}px;font-weight:600;color:${color};line-height:1.05;">${remain}%</div>
-            ${isMobile ? "" : `<div data-usage-countdown="${index}" style="font-size:8px;color:${textMuted};margin-top:2px;">${cdText(row.resets_at)}</div>`}
-          </div>
-          ${divider}`;
-          })
-          .join("");
-        panel.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:${isMobile ? 2 : 8}px;align-items:center;">
-          ${collapsedRows}
-        </div>
-      `;
-      }
-
       startCountdown();
     }
 
     function startCountdown() {
       if (countdownTimer) clearInterval(countdownTimer);
+      // 两端都走增量渲染：只更新既有节点文本，不重建 DOM。
       countdownTimer = setInterval(() => {
         if (provider === "claude") {
           renderClaudePanel();
-          return;
+        } else {
+          renderChatGPTPanel();
         }
-        const rows = getUsageRows();
-        panel
-          ?.querySelectorAll("[data-usage-countdown]")
-          .forEach((element) => {
-            const index = Number(element.getAttribute("data-usage-countdown"));
-            element.textContent = cdText(rows[index]?.resets_at);
-          });
       }, 30000);
     }
 
@@ -2007,7 +1932,7 @@
         const deltaY = e.clientY - startY;
         if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
           pointerMoved = true;
-          isHovered = false;
+          setChatGPTWidgetState(false);
         }
 
         let newLeft = startLeft + deltaX;
@@ -2063,7 +1988,8 @@
           );
 
           if (!pointerMoved && e.pointerType !== "mouse") {
-            isHovered = !isHovered;
+            // 触屏 tap 切换展开/收起
+            setChatGPTWidgetState(!isHovered);
           }
 
           // 重新渲染以调整展开方向
@@ -2173,17 +2099,11 @@
           enableDrag();
 
           panel.addEventListener("mouseenter", () => {
-            if (!isDragging) {
-              isHovered = true;
-              renderPanel();
-            }
+            if (!isDragging) setChatGPTWidgetState(true);
           });
 
           panel.addEventListener("mouseleave", () => {
-            if (!isDragging) {
-              isHovered = false;
-              renderPanel();
-            }
+            if (!isDragging) setChatGPTWidgetState(false);
           });
         } else {
           applyClaudePosition();

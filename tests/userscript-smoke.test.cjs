@@ -4,35 +4,70 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-test("runs on chatgpt.com and renders the weekly usage limit without Claude globals", async () => {
+test("runs on chatgpt.com and mounts the shadow widget without Claude globals", async () => {
   const source = fs.readFileSync(
     path.join(__dirname, "..", "claude-chatgpt-usage.user.js"),
     "utf8",
   );
   const elements = new Map();
 
-  function createElement() {
-    const listeners = new Map();
-    return {
-      _listeners: listeners,
+  // 渲染层走 Shadow DOM 增量更新；假 DOM 提供"万能 stub"让整条渲染路径不抛错，
+  // 数据正确性由 usage-parsers 单测与 chatgpt-widget-ui 源码断言覆盖。
+  function createStubElement(tag = "div") {
+    const attributes = new Map();
+    const stub = {
+      _listeners: new Map(),
+      _tag: tag,
       addEventListener(type, listener) {
-        listeners.set(type, listener);
+        stub._listeners.set(type, listener);
       },
+      appendChild(child) {
+        child.parentNode = stub;
+        return child;
+      },
+      classList: {
+        add() {},
+        contains: () => false,
+        remove() {},
+        toggle() {},
+      },
+      dataset: {},
+      getAttribute: (name) => attributes.get(name) ?? null,
       getBoundingClientRect() {
-        return { left: 1000, right: 1056, top: 50 };
+        return { left: 1000, right: 1104, top: 50 };
       },
+      hidden: false,
       id: "",
       innerHTML: "",
       offsetHeight: 100,
+      offsetTop: 0,
       parentNode: null,
-      querySelectorAll() {
-        return [];
-      },
+      querySelector: () => createStubElement(),
+      querySelectorAll: () => [],
       releasePointerCapture() {},
+      remove() {},
+      removeEventListener() {},
+      setAttribute(name, value) {
+        attributes.set(name, String(value));
+      },
       setPointerCapture() {},
-      style: {},
+      style: { setProperty() {} },
+      textContent: "",
       title: "",
+      toggleAttribute() {},
     };
+    return stub;
+  }
+
+  const shadowRoots = [];
+  function createElement(tag) {
+    const element = createStubElement(tag);
+    element.attachShadow = () => {
+      const shadow = createStubElement("#shadow-root");
+      shadowRoots.push(shadow);
+      return shadow;
+    };
+    return element;
   }
 
   const body = {
@@ -111,11 +146,6 @@ test("runs on chatgpt.com and renders the weekly usage limit without Claude glob
           available_count: 4,
           credits: [
             {
-              id: "reset-later",
-              status: "available",
-              expires_at: "2026-08-12T00:00:00Z",
-            },
-            {
               id: "reset-nearest",
               status: "available",
               expires_at: "2026-08-01T00:00:00Z",
@@ -168,21 +198,26 @@ test("runs on chatgpt.com and renders the weekly usage limit without Claude glob
   const panel = elements.get("claude-usage-panel-bottom");
   assert.ok(panel, "usage panel should be mounted");
   assert.equal(panel.title, "ChatGPT 使用限制");
-  assert.match(panel.innerHTML, /36%/);
-  assert.match(panel.innerHTML, />7d</);
-  assert.doesNotMatch(panel.innerHTML, /每周使用限额|重置卡/);
-  panel._listeners.get("mouseenter")();
-  assert.equal(panel.style.width, "228px");
-  assert.match(panel.innerHTML, /Pro Lite/);
-  assert.match(panel.innerHTML, /每周使用限额/);
-  assert.match(panel.innerHTML, /重置卡/);
-  assert.match(panel.innerHTML, /4 次可用/);
-  assert.match(panel.innerHTML, /最近到期/);
-  assert.doesNotMatch(panel.innerHTML, /Codex 当前额度|77%/);
-  assert.doesNotMatch(panel.innerHTML, /data-usage-heading="model"/);
-  assert.doesNotMatch(
-    panel.innerHTML,
-    /GPT-5\.3-Codex-Spark|Spark 独立额度|主窗口/,
-  );
-  assert.match(panel.innerHTML, /text-overflow:ellipsis/);
+  assert.equal(panel.getAttribute("data-chatgpt-usage-widget"), "v3");
+  assert.equal(panel.getAttribute("data-theme"), "light");
+
+  // Shadow DOM 骨架：新设计语言的展开卡、收起卡、重置卡容器都应在位。
+  assert.equal(shadowRoots.length, 1, "one shadow root should be attached");
+  const skeleton = shadowRoots[0].innerHTML;
+  assert.match(skeleton, /ChatGPT 用量/);
+  assert.match(skeleton, /compact-card/);
+  assert.match(skeleton, /expanded-card/);
+  assert.match(skeleton, /credit-list/);
+  assert.match(skeleton, /plan-badge/);
+  assert.match(skeleton, /widgetSharedStyles|--cu-bg/);
+  // Claude 专属控件不应泄漏进 ChatGPT 面板。
+  assert.doesNotMatch(skeleton, /settings-popover|Claude 用量/);
+
+  // hover/tap 交互经 setChatGPTWidgetState，不应抛错。
+  const hover = panel._listeners.get("mouseenter");
+  assert.ok(hover, "host should listen for mouseenter");
+  hover();
+  const leave = panel._listeners.get("mouseleave");
+  assert.ok(leave, "host should listen for mouseleave");
+  leave();
 });

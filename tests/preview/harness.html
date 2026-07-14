@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude 用量浮窗预览 Harness</title>
+<title>用量浮窗预览 Harness</title>
 <style>
-  /* 仿 claude.ai 页面底色，让浮窗在真实感环境中评估 */
+  /* 仿 claude.ai / chatgpt.com 页面底色，让浮窗在真实感环境中评估 */
   :root { --page-bg: #faf9f5; --page-text: #3d3929; --card-bg: #ffffff; --card-border: #e8e6dc; }
+  html[data-site="chatgpt"] { --page-bg: #ffffff; --page-text: #0d0d0d; --card-bg: #f7f7f8; --card-border: #e5e5e5; }
   html.dark { --page-bg: #262624; --page-text: #eeece2; --card-bg: #30302e; --card-border: #3f3e3a; }
+  html.dark[data-site="chatgpt"] { --page-bg: #212121; --page-text: #ececec; --card-bg: #2f2f2f; --card-border: #424242; }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; background: var(--page-bg); color: var(--page-text);
@@ -16,14 +18,14 @@
   }
   .toolbar {
     position: fixed; left: 16px; top: 16px; z-index: 99;
-    display: flex; gap: 8px; flex-wrap: wrap; max-width: 420px;
+    display: flex; gap: 8px; flex-wrap: wrap; max-width: 460px;
   }
   .toolbar button {
     padding: 6px 12px; border: 1px solid var(--card-border); border-radius: 8px;
     background: var(--card-bg); color: var(--page-text); font-size: 12px; cursor: pointer;
   }
   .toolbar button.active { outline: 2px solid #4285f4; }
-  main { max-width: 680px; margin: 0 auto; padding: 96px 24px 48px; }
+  main { max-width: 680px; margin: 0 auto; padding: 110px 24px 48px; }
   .fake-chat {
     border: 1px solid var(--card-border); border-radius: 16px; background: var(--card-bg);
     padding: 24px; line-height: 1.7; font-size: 14px;
@@ -37,6 +39,7 @@
 </head>
 <body>
 <div class="toolbar">
+  <button id="btn-site"></button>
   <button id="btn-theme">🌓 明/暗</button>
   <button data-scene="normal">正常额度</button>
   <button data-scene="danger">低额度告警</button>
@@ -45,15 +48,30 @@
 </div>
 <main>
   <div class="fake-chat">
-    <h1>仿 Claude 对话区</h1>
-    <p>这是一个本地预览 harness：右侧浮窗即油猴脚本真实渲染结果（Shadow DOM、状态机、设置持久化全部走线上同一套代码），仅额度接口被 mock 替换。</p>
-    <p>用左上角按钮切换明暗主题与数据场景；数据场景切换会刷新页面。悬停收起卡展开，Esc 收起，齿轮进设置。</p>
+    <h1 id="page-title">仿对话区</h1>
+    <p>这是一个本地预览 harness：浮窗即油猴脚本真实渲染结果（Shadow DOM、状态机、设置持久化全部走线上同一套代码），仅额度接口被 mock 替换。</p>
+    <p>用左上角按钮切换站点、明暗主题与数据场景；站点与数据场景切换会刷新页面。Claude 浮窗悬停展开、Esc 收起、齿轮进设置；ChatGPT 浮窗悬停展开、可整体拖动。</p>
   </div>
-  <div class="fake-input">给 Claude 发送消息…</div>
+  <div class="fake-input" id="fake-input">发送消息…</div>
 </main>
 
 <script>
 (async function bootstrapHarness() {
+  // ---------- 0. 站点切换 ----------
+  const SITE_KEY = "harness-site";
+  const site = localStorage.getItem(SITE_KEY) === "chatgpt" ? "chatgpt" : "claude";
+  document.documentElement.dataset.site = site;
+  document.getElementById("page-title").textContent =
+    site === "chatgpt" ? "仿 ChatGPT 对话区" : "仿 Claude 对话区";
+  document.getElementById("fake-input").textContent =
+    site === "chatgpt" ? "询问任何问题…" : "给 Claude 发送消息…";
+  const siteBtn = document.getElementById("btn-site");
+  siteBtn.textContent = site === "chatgpt" ? "🔁 切到 Claude" : "🔁 切到 ChatGPT";
+  siteBtn.addEventListener("click", () => {
+    localStorage.setItem(SITE_KEY, site === "chatgpt" ? "claude" : "chatgpt");
+    location.reload();
+  });
+
   // ---------- 1. mock 数据场景 ----------
   const SCENE_KEY = "harness-scene";
   const scene = localStorage.getItem(SCENE_KEY) || "normal";
@@ -69,6 +87,7 @@
   });
   document.getElementById("btn-clear").addEventListener("click", () => {
     localStorage.removeItem("claude-usage-monitor:settings:v1");
+    localStorage.removeItem("claude2cn-chatgpt-usage-position");
     localStorage.removeItem(SCENE_KEY);
     location.reload();
   });
@@ -83,7 +102,7 @@
     return d.toISOString();
   })();
 
-  const SCENES = {
+  const CLAUDE_SCENES = {
     normal: {
       five_hour: { utilization: 87, resets_at: in30m },
       seven_day: { utilization: 18, resets_at: nextFriday },
@@ -102,22 +121,54 @@
     },
     error: null, // usage 接口一律 500
   };
-  const mockUsage = SCENES[scene];
+  const CHATGPT_SCENES = {
+    normal: {
+      plan_type: "prolite",
+      rate_limit: {
+        primary_window: { used_percent: 23, resets_at: in30m, limit_window_seconds: 18000 },
+        secondary_window: { used_percent: 64, resets_at: nextFriday, limit_window_seconds: 604800 },
+      },
+      rate_limit_reset_credits: { available_count: 4 },
+    },
+    danger: {
+      plan_type: "prolite",
+      rate_limit: {
+        secondary_window: { used_percent: 92, resets_at: nextFriday, limit_window_seconds: 604800 },
+      },
+      rate_limit_reset_credits: { available_count: 0 },
+    },
+    error: null,
+  };
+  const mockClaude = CLAUDE_SCENES[scene];
+  const mockChatGPT = CHATGPT_SCENES[scene];
   const MOCK_ORG = "11111111-2222-3333-4444-555555555555";
+  const creditExpiry = new Date(now + 18 * 24 * 3600 * 1000).toISOString();
 
   // ---------- 2. mock fetch（须在 userscript 捕获 _origFetch 之前安装）----------
   const realFetch = window.fetch.bind(window);
   window.fetch = async function (input, init) {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : "";
+    const json = (data, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+
     if (url.includes("claude.ai/api/bootstrap")) {
-      return new Response(JSON.stringify({ account: { uuid: MOCK_ORG } }), {
-        status: 200, headers: { "Content-Type": "application/json" },
-      });
+      return json({ account: { uuid: MOCK_ORG } });
     }
     if (/claude\.ai\/api\/organizations\/[^/]+\/(usage|rate_limit_status|limits)/.test(url)) {
-      if (!mockUsage) return new Response("mock error", { status: 500 });
-      return new Response(JSON.stringify(mockUsage), {
-        status: 200, headers: { "Content-Type": "application/json" },
+      return mockClaude ? json(mockClaude) : new Response("mock error", { status: 500 });
+    }
+    if (url.includes("chatgpt.com/api/auth/session")) {
+      return json({ accessToken: "harness-token", account: { id: "acct-harness" } });
+    }
+    if (url.includes("/backend-api/codex/usage") || url.includes("/backend-api/wham/usage") || url.includes("/api/codex/usage")) {
+      return mockChatGPT ? json(mockChatGPT) : new Response("mock error", { status: 500 });
+    }
+    if (url.includes("rate-limit-reset-credits")) {
+      return json({
+        available_count: mockChatGPT?.rate_limit_reset_credits?.available_count ?? 0,
+        credits: (mockChatGPT?.rate_limit_reset_credits?.available_count ?? 0) > 0
+          ? [{ id: "c1", status: "available", expires_at: creditExpiry }]
+          : [],
       });
     }
     return realFetch(input, init);
@@ -132,9 +183,9 @@
   let source = await res.text();
   source = source
     .replace('const isClaudeSite = location.hostname === "claude.ai";',
-             "const isClaudeSite = true;")
+             `const isClaudeSite = ${site === "claude"};`)
     .replace('const isChatGPTSite = location.hostname === "chatgpt.com";',
-             "const isChatGPTSite = false;");
+             `const isChatGPTSite = ${site === "chatgpt"};`);
   (0, eval)(source);
 })();
 </script>

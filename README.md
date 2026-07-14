@@ -11,7 +11,7 @@
 - **Claude 额度显示**：显示 5 小时窗口、7 日总额度和 Fable 5 独立周额度。
 - **Claude 精简浮窗**：默认用 `5h / 7d / F5` 三行胶囊显示剩余比例，鼠标移入后平滑展开完整进度、倒计时和重置时间；展开态按额度类型配彩色图标，低额度自动转告警红。
 - **新旧接口兼容**：同时解析新版 `limits[]`、旧版 `seven_day_fable`、`fable_weekly` 等字段。
-- **ChatGPT/Codex 额度显示**：与 ChatGPT 网页端一致，显示套餐共享的每周使用限额和可用重置卡摘要。
+- **ChatGPT/Codex 额度显示**：与 ChatGPT 网页端一致，显示套餐共享的每周使用限额和可用重置卡摘要；浮窗与 Claude 端同一套设计语言（收起胶囊 + 展开卡 + 品牌绿徽章）。
 - **重置时间跟踪**：显示额度重置日期和剩余倒计时。
 - **状态与设置记忆**：Claude 浮窗支持收起、展开、设置、隐藏四种状态，并记忆自动收起、重置时间与垂直位置设置。
 - **ChatGPT 面板可拖动**：支持桌面端和移动端触控拖动，位置独立保存在 ChatGPT 域名下。
@@ -76,8 +76,8 @@ node --check claude-chatgpt-usage.user.js
 ```
 
 调试浮窗样式时，在仓库根目录起任意静态服务（如 `python3 -m http.server 8642`），
-打开 `http://localhost:8642/tests/preview/harness.html` 即可脱离 claude.ai
-真实渲染浮窗，并切换明暗主题与正常 / 低额度 / 接口失败场景。
+打开 `http://localhost:8642/tests/preview/harness.html` 即可脱离 claude.ai / chatgpt.com
+真实渲染浮窗，并一键切换站点、明暗主题与正常 / 低额度 / 接口失败场景。
 
 ## 来源与授权
 
