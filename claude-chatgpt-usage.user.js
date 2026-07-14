@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.6
+// @version      1.1.0
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -487,8 +487,23 @@
     let countdownTimer = null;
     let isHovered = false;
     let panel = null;
+    let claudeShadow = null;
+    let claudeWidgetState = "collapsed";
+    let claudeAutoCollapseTimer = null;
+    let claudeDocumentClickHandler = null;
+    let claudeKeyHandler = null;
     let isDragging = false;
     let savedPosition = { left: null, right: 4, top: 50, isRight: true }; // 默认右上角
+
+    const claudeSettingsStorageKey = "claude-usage-monitor:settings:v1";
+    const defaultClaudeSettings = Object.freeze({
+      autoCollapse: true,
+      autoCollapseDelay: 4000,
+      showResetTime: true,
+      verticalPosition: "top",
+      lastVisibleState: "collapsed",
+    });
+    let claudeSettings = { ...defaultClaudeSettings };
 
     let usageData = {
       provider,
@@ -567,6 +582,7 @@
     }
 
     function createPanel() {
+      if (provider === "claude") return createClaudePanel();
       const metrics = getPanelMetrics();
       panel = document.createElement("div");
       panel.id = "claude-usage-panel-bottom";
@@ -593,12 +609,648 @@
       return panel;
     }
 
+    function loadClaudeSettings() {
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem(claudeSettingsStorageKey) || "{}",
+        );
+        const delay = [2000, 4000, 8000].includes(saved.autoCollapseDelay)
+          ? saved.autoCollapseDelay
+          : defaultClaudeSettings.autoCollapseDelay;
+        const verticalPosition = ["top", "center", "bottom"].includes(
+          saved.verticalPosition,
+        )
+          ? saved.verticalPosition
+          : defaultClaudeSettings.verticalPosition;
+        const lastVisibleState = ["collapsed", "expanded", "hidden"].includes(
+          saved.lastVisibleState,
+        )
+          ? saved.lastVisibleState
+          : defaultClaudeSettings.lastVisibleState;
+        return {
+          autoCollapse:
+            typeof saved.autoCollapse === "boolean"
+              ? saved.autoCollapse
+              : defaultClaudeSettings.autoCollapse,
+          autoCollapseDelay: delay,
+          showResetTime:
+            typeof saved.showResetTime === "boolean"
+              ? saved.showResetTime
+              : defaultClaudeSettings.showResetTime,
+          verticalPosition,
+          lastVisibleState,
+        };
+      } catch {
+        return { ...defaultClaudeSettings };
+      }
+    }
+
+    function saveClaudeSettings() {
+      try {
+        localStorage.setItem(
+          claudeSettingsStorageKey,
+          JSON.stringify(claudeSettings),
+        );
+      } catch {}
+    }
+
+    function claudeIcon(name) {
+      // Tabler Icons 风格的内嵌线性图标；不依赖外部 CDN。
+      const paths = {
+        bolt: '<path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/>',
+        close: '<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>',
+        refresh:
+          '<path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>',
+        settings:
+          '<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0 -2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0 -1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/>',
+      };
+      return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ""}</svg>`;
+    }
+
+    function createClaudePanel() {
+      claudeSettings = loadClaudeSettings();
+      claudeWidgetState = claudeSettings.lastVisibleState;
+      const host = document.createElement("div");
+      host.id = "claude-usage-panel-bottom";
+      host.setAttribute("data-claude-usage-widget", "v2");
+      claudeShadow = host.attachShadow({ mode: "open" });
+      claudeShadow.innerHTML = `
+        <style>
+          :host {
+            --cu-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            --cu-bg: rgba(255, 255, 255, 0.94);
+            --cu-bg-soft: rgba(248, 249, 250, 0.94);
+            --cu-text: #202124;
+            --cu-text-secondary: #6f7379;
+            --cu-text-tertiary: #96999e;
+            --cu-border: rgba(32, 33, 36, 0.10);
+            --cu-divider: rgba(32, 33, 36, 0.08);
+            --cu-shadow: 0 10px 30px rgba(31, 35, 41, 0.10);
+            --cu-danger: #ef493d;
+            --cu-transition: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: fixed;
+            top: 96px;
+            right: 12px;
+            z-index: 2147483000;
+            color: var(--cu-text);
+            font-family: var(--cu-font);
+            font-size: 13px;
+            line-height: 1.4;
+            color-scheme: light;
+            user-select: none;
+          }
+          :host([data-theme="dark"]) {
+            --cu-bg: rgba(37, 38, 40, 0.94);
+            --cu-bg-soft: rgba(255, 255, 255, 0.055);
+            --cu-text: #f2f3f5;
+            --cu-text-secondary: #b5b8bd;
+            --cu-text-tertiary: #8f9399;
+            --cu-border: rgba(255, 255, 255, 0.11);
+            --cu-divider: rgba(255, 255, 255, 0.08);
+            --cu-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+            color-scheme: dark;
+          }
+          *, *::before, *::after { box-sizing: border-box; }
+          button, select, input { font: inherit; }
+          button { color: inherit; }
+          [hidden] { display: none !important; }
+          svg { width: 18px; height: 18px; display: block; }
+          .usage-widget { position: relative; }
+          .compact-card {
+            width: 104px;
+            padding: 8px;
+            display: grid;
+            gap: 6px;
+            border: 1px solid var(--cu-border);
+            border-radius: 14px;
+            background: var(--cu-bg);
+            box-shadow: var(--cu-shadow);
+            backdrop-filter: blur(12px) saturate(1.05);
+            -webkit-backdrop-filter: blur(12px) saturate(1.05);
+            cursor: pointer;
+            transition: opacity var(--cu-transition), transform var(--cu-transition), box-shadow var(--cu-transition);
+          }
+          .compact-card:hover { transform: translateY(-1px); box-shadow: 0 14px 34px rgba(31, 35, 41, 0.13); }
+          .compact-card:focus-visible, .icon-button:focus-visible, .setting-control:focus-visible, .reset-settings:focus-visible {
+            outline: 2px solid #4285f4;
+            outline-offset: 2px;
+          }
+          .compact-list { display: grid; gap: 6px; }
+          .compact-row {
+            min-height: 34px;
+            padding: 0 9px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 8px;
+            border-radius: 10px;
+            background: var(--quota-soft, var(--cu-bg-soft));
+          }
+          .compact-label { color: var(--cu-text-secondary); font-size: 12px; font-weight: 500; }
+          .compact-percent { color: var(--quota-color); font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+          .compact-status { min-height: 34px; display: grid; place-items: center; color: var(--cu-text-secondary); font-size: 12px; }
+          .expanded-card {
+            width: min(304px, calc(100vw - 24px));
+            min-height: 306px;
+            max-height: calc(100vh - 32px);
+            display: flex;
+            overflow: auto;
+            flex-direction: column;
+            border: 1px solid var(--cu-border);
+            border-radius: 16px;
+            background: var(--cu-bg);
+            box-shadow: var(--cu-shadow);
+            backdrop-filter: blur(12px) saturate(1.05);
+            -webkit-backdrop-filter: blur(12px) saturate(1.05);
+            transition: opacity var(--cu-transition), transform var(--cu-transition), width var(--cu-transition);
+          }
+          .widget-header {
+            min-height: 54px;
+            padding: 0 14px 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--cu-divider);
+            cursor: pointer;
+          }
+          .widget-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+          .widget-title svg { width: 14px; height: 14px; color: #ff7a45; stroke-width: 2; }
+          .icon-button {
+            width: 32px;
+            height: 32px;
+            padding: 7px;
+            display: grid;
+            place-items: center;
+            border: 0;
+            border-radius: 9px;
+            background: transparent;
+            color: var(--cu-text-secondary);
+            cursor: pointer;
+          }
+          .icon-button:hover { background: var(--cu-bg-soft); color: var(--cu-text); }
+          .quota-list { flex: 1 1 auto; padding: 3px 0; }
+          .quota-item { padding: 12px 16px 13px; }
+          .quota-meta, .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; }
+          .quota-meta { margin-bottom: 9px; }
+          .quota-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cu-text-secondary); font-size: 13px; font-weight: 500; }
+          .quota-remaining { color: var(--cu-text-secondary); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+          .quota-track { height: 6px; overflow: hidden; border-radius: 999px; background: var(--quota-soft); }
+          .quota-fill { width: var(--remaining-percent); height: 100%; border-radius: inherit; background: var(--quota-color); transition: width 300ms ease; }
+          .quota-percent { min-width: 54px; text-align: right; color: var(--quota-color); font-size: 24px; line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; }
+          .expanded-status { min-height: 132px; display: grid; place-items: center; padding: 24px; color: var(--cu-text-secondary); text-align: center; }
+          .widget-footer {
+            min-height: 52px;
+            padding: 0 14px 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-top: 1px solid var(--cu-divider);
+            color: var(--cu-text-secondary);
+          }
+          .reset-time { min-width: 0; display: flex; align-items: center; gap: 7px; font-size: 12px; white-space: nowrap; }
+          .reset-time svg { width: 15px; height: 15px; flex: 0 0 auto; }
+          .reset-time time { font-variant-numeric: tabular-nums; }
+          .settings-popover {
+            position: absolute;
+            top: 62px;
+            right: 12px;
+            width: 252px;
+            padding: 14px;
+            border: 1px solid var(--cu-border);
+            border-radius: 14px;
+            background: var(--cu-bg);
+            box-shadow: var(--cu-shadow);
+          }
+          .settings-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; }
+          .setting-row { min-height: 38px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; color: var(--cu-text-secondary); font-size: 12px; }
+          .setting-control { min-width: 76px; accent-color: #4285f4; }
+          .setting-row select { padding: 4px 7px; border: 1px solid var(--cu-border); border-radius: 7px; background: var(--cu-bg-soft); color: var(--cu-text); }
+          .reset-settings { width: 100%; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--cu-border); border-radius: 9px; background: var(--cu-bg-soft); color: var(--cu-text-secondary); cursor: pointer; }
+          .usage-tooltip {
+            position: absolute;
+            right: calc(100% + 8px);
+            z-index: 3;
+            width: max-content;
+            max-width: 250px;
+            padding: 8px 10px;
+            border: 1px solid var(--cu-border);
+            border-radius: 9px;
+            background: var(--cu-bg);
+            box-shadow: var(--cu-shadow);
+            color: var(--cu-text-secondary);
+            font-size: 11px;
+            line-height: 1.55;
+            pointer-events: none;
+            white-space: normal;
+          }
+          @media (max-width: 640px) { :host { display: none; } }
+          @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
+        </style>
+        <div class="usage-widget" data-state="collapsed">
+          <button class="compact-card" type="button" data-action="expand" aria-label="展开 Claude 用量详情">
+            <span class="compact-list"></span>
+            <span class="compact-status">正在获取额度…</span>
+          </button>
+          <section class="expanded-card" hidden aria-label="Claude 用量详情">
+            <header class="widget-header" data-action="collapse" title="点击空白区域收起">
+              <div class="widget-title">${claudeIcon("bolt")}<span>Claude 用量</span></div>
+              <button class="icon-button" type="button" data-action="hide" aria-label="关闭用量浮窗">${claudeIcon("close")}</button>
+            </header>
+            <div class="quota-list"></div>
+            <div class="expanded-status">正在获取额度…</div>
+            <footer class="widget-footer">
+              <span class="reset-time">${claudeIcon("refresh")}<span>重置时间：</span><time>--/-- -- --:--</time></span>
+              <button class="icon-button" type="button" data-action="settings" aria-label="用量浮窗设置">${claudeIcon("settings")}</button>
+            </footer>
+            <div class="settings-popover" hidden>
+              <h3 class="settings-title">浮窗设置</h3>
+              <label class="setting-row"><span>自动收起</span><input class="setting-control" data-setting="autoCollapse" type="checkbox"></label>
+              <label class="setting-row"><span>收起延迟</span><select class="setting-control" data-setting="autoCollapseDelay"><option value="2000">2 秒</option><option value="4000">4 秒</option><option value="8000">8 秒</option></select></label>
+              <label class="setting-row"><span>显示重置时间</span><input class="setting-control" data-setting="showResetTime" type="checkbox"></label>
+              <label class="setting-row"><span>垂直位置</span><select class="setting-control" data-setting="verticalPosition"><option value="top">顶部</option><option value="center">居中</option><option value="bottom">底部</option></select></label>
+              <button class="reset-settings" type="button" data-action="reset-settings">恢复默认设置</button>
+            </div>
+          </section>
+          <div class="usage-tooltip" role="tooltip" hidden></div>
+        </div>`;
+      panel = host;
+      bindClaudePanelEvents(host);
+      applyClaudePosition(host);
+      setClaudeWidgetState(claudeWidgetState, false);
+      return host;
+    }
+
+    function applyClaudePosition(host = panel) {
+      if (!host) return;
+      host.style.left = "auto";
+      host.style.right = "12px";
+      host.style.top = "auto";
+      host.style.bottom = "auto";
+      host.style.transform = "none";
+      if (claudeSettings.verticalPosition === "center") {
+        host.style.top = "50%";
+        host.style.transform = "translateY(-50%)";
+      } else if (claudeSettings.verticalPosition === "bottom") {
+        host.style.bottom = "24px";
+      } else {
+        host.style.top = "96px";
+      }
+    }
+
+    function clearClaudeAutoCollapse() {
+      if (claudeAutoCollapseTimer) clearTimeout(claudeAutoCollapseTimer);
+      claudeAutoCollapseTimer = null;
+    }
+
+    function scheduleClaudeAutoCollapse() {
+      clearClaudeAutoCollapse();
+      if (
+        !claudeSettings.autoCollapse ||
+        claudeWidgetState !== "expanded"
+      )
+        return;
+      claudeAutoCollapseTimer = setTimeout(
+        () => setClaudeWidgetState("collapsed"),
+        claudeSettings.autoCollapseDelay,
+      );
+    }
+
+    function setClaudeWidgetState(nextState, persist = true) {
+      if (!claudeShadow || !panel) return;
+      const allowed = ["collapsed", "expanded", "settings", "hidden"];
+      const next = allowed.includes(nextState) ? nextState : "collapsed";
+      claudeWidgetState = next;
+      clearClaudeAutoCollapse();
+
+      const widget = claudeShadow.querySelector(".usage-widget");
+      const compact = claudeShadow.querySelector(".compact-card");
+      const expanded = claudeShadow.querySelector(".expanded-card");
+      const settings = claudeShadow.querySelector(".settings-popover");
+      widget.dataset.state = next;
+      panel.style.display = next === "hidden" ? "none" : "";
+      compact.hidden = next !== "collapsed";
+      expanded.hidden = !["expanded", "settings"].includes(next);
+      settings.hidden = next !== "settings";
+
+      if (next !== "settings") {
+        claudeSettings.lastVisibleState = next;
+      } else {
+        claudeSettings.lastVisibleState = "expanded";
+      }
+      if (persist) saveClaudeSettings();
+    }
+
+    function updateClaudeSettingsControls() {
+      if (!claudeShadow) return;
+      claudeShadow.querySelector('[data-setting="autoCollapse"]').checked =
+        claudeSettings.autoCollapse;
+      claudeShadow.querySelector(
+        '[data-setting="autoCollapseDelay"]',
+      ).value = String(claudeSettings.autoCollapseDelay);
+      claudeShadow.querySelector('[data-setting="showResetTime"]').checked =
+        claudeSettings.showResetTime;
+      claudeShadow.querySelector(
+        '[data-setting="verticalPosition"]',
+      ).value = claudeSettings.verticalPosition;
+    }
+
+    function registerClaudeMenuCommands() {
+      const register =
+        typeof globalThis.GM_registerMenuCommand === "function"
+          ? globalThis.GM_registerMenuCommand
+          : typeof globalThis.GM?.registerMenuCommand === "function"
+            ? globalThis.GM.registerMenuCommand.bind(globalThis.GM)
+            : null;
+      if (!register) return;
+      register("显示 Claude 用量监控", () =>
+        setClaudeWidgetState("collapsed"),
+      );
+      register("隐藏 Claude 用量监控", () =>
+        setClaudeWidgetState("hidden"),
+      );
+      register("恢复用量浮窗默认设置", () => {
+        claudeSettings = { ...defaultClaudeSettings };
+        saveClaudeSettings();
+        applyClaudePosition();
+        updateClaudeSettingsControls();
+        setClaudeWidgetState("collapsed");
+        renderClaudePanel();
+      });
+    }
+
+    function bindClaudePanelEvents(host) {
+      const compact = claudeShadow.querySelector('[data-action="expand"]');
+      const header = claudeShadow.querySelector(".widget-header");
+      compact.addEventListener("click", () =>
+        setClaudeWidgetState("expanded"),
+      );
+      header.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("button"))
+          return;
+        setClaudeWidgetState("collapsed");
+      });
+      claudeShadow
+        .querySelector('[data-action="hide"]')
+        .addEventListener("click", () => setClaudeWidgetState("hidden"));
+      claudeShadow
+        .querySelector('[data-action="settings"]')
+        .addEventListener("click", () => setClaudeWidgetState("settings"));
+      claudeShadow
+        .querySelector('[data-action="reset-settings"]')
+        .addEventListener("click", () => {
+          claudeSettings = { ...defaultClaudeSettings };
+          saveClaudeSettings();
+          applyClaudePosition(host);
+          updateClaudeSettingsControls();
+          setClaudeWidgetState("expanded");
+          renderClaudePanel();
+        });
+
+      claudeShadow
+        .querySelector('[data-setting="autoCollapse"]')
+        .addEventListener("change", (event) => {
+          claudeSettings.autoCollapse = event.target.checked;
+          saveClaudeSettings();
+        });
+      claudeShadow
+        .querySelector('[data-setting="autoCollapseDelay"]')
+        .addEventListener("change", (event) => {
+          claudeSettings.autoCollapseDelay = Number(event.target.value);
+          saveClaudeSettings();
+        });
+      claudeShadow
+        .querySelector('[data-setting="showResetTime"]')
+        .addEventListener("change", (event) => {
+          claudeSettings.showResetTime = event.target.checked;
+          saveClaudeSettings();
+          renderClaudePanel();
+        });
+      claudeShadow
+        .querySelector('[data-setting="verticalPosition"]')
+        .addEventListener("change", (event) => {
+          claudeSettings.verticalPosition = event.target.value;
+          saveClaudeSettings();
+          applyClaudePosition(host);
+        });
+
+      host.addEventListener("mouseenter", clearClaudeAutoCollapse);
+      host.addEventListener("mouseleave", scheduleClaudeAutoCollapse);
+      claudeDocumentClickHandler = (event) => {
+        if (claudeWidgetState === "hidden" || host.contains(event.target)) return;
+        if (claudeWidgetState === "settings") {
+          setClaudeWidgetState("expanded");
+        } else if (claudeWidgetState === "expanded") {
+          setClaudeWidgetState("collapsed");
+        }
+      };
+      claudeKeyHandler = (event) => {
+        if (event.altKey && event.shiftKey && event.key.toLowerCase() === "u") {
+          setClaudeWidgetState("collapsed");
+          return;
+        }
+        if (event.key !== "Escape") return;
+        if (claudeWidgetState === "settings") {
+          setClaudeWidgetState("expanded");
+        } else if (claudeWidgetState === "expanded") {
+          setClaudeWidgetState("collapsed");
+        }
+      };
+      document.addEventListener("click", claudeDocumentClickHandler);
+      document.addEventListener("keydown", claudeKeyHandler);
+      updateClaudeSettingsControls();
+      registerClaudeMenuCommands();
+    }
+
+    function getClaudeViewRows() {
+      return getUsageRows()
+        .filter(
+          (row) =>
+            row.key === "primary" ||
+            row.key === "secondary" ||
+            /^Fable 5$/i.test(row.title || ""),
+        )
+        .map((row) => {
+          const used = pct(row.utilization);
+          const remaining = 100 - used;
+          const isFable = /^Fable 5$/i.test(row.title || "");
+          const type =
+            row.key === "primary"
+              ? "fiveHour"
+              : row.key === "secondary"
+                ? "sevenDay"
+                : isFable
+                  ? "fableFive"
+                  : "model";
+          const shortLabel =
+            type === "fiveHour"
+              ? "5h"
+              : type === "sevenDay"
+                ? "7d"
+                : type === "fableFive"
+                  ? "F5"
+                  : row.short;
+          const fullLabel =
+            type === "fiveHour"
+              ? "5 小时窗口"
+              : type === "sevenDay"
+                ? "7 天配额"
+                : type === "fableFive"
+                  ? "Fable 5 · 7 天配额"
+                  : row.label;
+          const baseColors = {
+            fiveHour: ["#ff6b3d", "rgba(255, 107, 61, 0.10)"],
+            sevenDay: ["#18b96b", "rgba(24, 185, 107, 0.10)"],
+            fableFive: ["#4285f4", "rgba(66, 133, 244, 0.10)"],
+            model: ["#4285f4", "rgba(66, 133, 244, 0.10)"],
+          };
+          const [baseColor, baseSoft] = baseColors[type];
+          const isDanger = remaining <= 20;
+          const countdown = cdText(row.resets_at);
+          return {
+            ...row,
+            type,
+            shortLabel,
+            fullLabel,
+            remaining,
+            remainingText: countdown ? `${countdown} 剩余` : "剩余时间待定",
+            resetText: fmtExpiryTime(row.resets_at),
+            color: isDanger ? "#ef493d" : baseColor,
+            softColor: isDanger ? "rgba(239, 73, 61, 0.10)" : baseSoft,
+          };
+        });
+    }
+
+    function showClaudeTooltip(element) {
+      const tooltip = claudeShadow?.querySelector(".usage-tooltip");
+      if (!tooltip || !element?.dataset.tooltip) return;
+      tooltip.textContent = element.dataset.tooltip;
+      tooltip.style.top = `${element.offsetTop}px`;
+      tooltip.hidden = false;
+    }
+
+    function hideClaudeTooltip() {
+      const tooltip = claudeShadow?.querySelector(".usage-tooltip");
+      if (tooltip) tooltip.hidden = true;
+    }
+
+    function updateClaudeQuotaNodes(rows) {
+      const compactList = claudeShadow.querySelector(".compact-list");
+      const quotaList = claudeShadow.querySelector(".quota-list");
+      const activeKeys = new Set(rows.map((row) => row.key));
+      for (const element of [
+        ...compactList.querySelectorAll("[data-quota-key]"),
+        ...quotaList.querySelectorAll("[data-quota-key]"),
+      ]) {
+        if (!activeKeys.has(element.dataset.quotaKey)) element.remove();
+      }
+
+      for (const row of rows) {
+        let compactRow = compactList.querySelector(
+          `[data-quota-key="${row.key}"]`,
+        );
+        if (!compactRow) {
+          compactRow = document.createElement("span");
+          compactRow.className = "compact-row";
+          compactRow.dataset.quotaKey = row.key;
+          compactRow.innerHTML =
+            '<span class="compact-label"></span><strong class="compact-percent"></strong>';
+          compactRow.addEventListener("mouseenter", () =>
+            showClaudeTooltip(compactRow),
+          );
+          compactRow.addEventListener("mouseleave", hideClaudeTooltip);
+          compactList.appendChild(compactRow);
+        }
+        compactRow.style.setProperty("--quota-color", row.color);
+        compactRow.style.setProperty("--quota-soft", row.softColor);
+        compactRow.querySelector(".compact-label").textContent = row.shortLabel;
+        compactRow.querySelector(".compact-percent").textContent =
+          `${row.remaining}%`;
+        compactRow.dataset.tooltip = `${row.fullLabel} · ${row.remainingText} · ${row.resetText} 重置`;
+        compactRow.title = compactRow.dataset.tooltip;
+        compactList.appendChild(compactRow);
+
+        let quotaItem = quotaList.querySelector(
+          `[data-quota-key="${row.key}"]`,
+        );
+        if (!quotaItem) {
+          quotaItem = document.createElement("article");
+          quotaItem.className = "quota-item";
+          quotaItem.dataset.quotaKey = row.key;
+          quotaItem.innerHTML = `
+            <div class="quota-meta"><span class="quota-name"></span><span class="quota-remaining"></span></div>
+            <div class="quota-value-row"><div class="quota-track" aria-hidden="true"><div class="quota-fill"></div></div><strong class="quota-percent"></strong></div>`;
+          quotaList.appendChild(quotaItem);
+        }
+        quotaItem.style.setProperty("--quota-color", row.color);
+        quotaItem.style.setProperty("--quota-soft", row.softColor);
+        quotaItem.style.setProperty(
+          "--remaining-percent",
+          `${row.remaining}%`,
+        );
+        quotaItem.setAttribute(
+          "aria-label",
+          `${row.fullLabel}剩余 ${row.remaining}%`,
+        );
+        quotaItem.querySelector(".quota-name").textContent = row.fullLabel;
+        quotaItem.querySelector(".quota-remaining").textContent =
+          row.remainingText;
+        quotaItem.querySelector(".quota-percent").textContent =
+          `${row.remaining}%`;
+        quotaList.appendChild(quotaItem);
+      }
+    }
+
+    function renderClaudePanel() {
+      if (!claudeShadow || !panel) return;
+      const rows = getClaudeViewRows();
+      const compactList = claudeShadow.querySelector(".compact-list");
+      const compactStatus = claudeShadow.querySelector(".compact-status");
+      const quotaList = claudeShadow.querySelector(".quota-list");
+      const expandedStatus = claudeShadow.querySelector(".expanded-status");
+      const statusText = usageData.fetchError
+        ? usageData.fetchError
+        : "正在获取额度…";
+
+      if (rows.length) {
+        updateClaudeQuotaNodes(rows);
+        compactList.hidden = false;
+        compactStatus.hidden = true;
+        quotaList.hidden = false;
+        expandedStatus.hidden = true;
+      } else {
+        compactList.hidden = true;
+        compactStatus.hidden = false;
+        compactStatus.textContent = usageData.fetchError ? "获取失败" : "正在获取…";
+        compactStatus.title = statusText;
+        quotaList.hidden = true;
+        expandedStatus.hidden = false;
+        expandedStatus.textContent = statusText;
+      }
+
+      const resetAt =
+        usageData.sevenDay?.resets_at ??
+        usageData.fiveHour?.resets_at ??
+        rows[0]?.resets_at ??
+        null;
+      const resetTime = claudeShadow.querySelector(".reset-time");
+      resetTime.hidden = !claudeSettings.showResetTime;
+      resetTime.querySelector("time").textContent = fmtExpiryTime(resetAt);
+      updateClaudeSettingsControls();
+      applyClaudePosition();
+    }
+
     function applyTheme() {
       if (!panel) return;
       const isDark =
         document.documentElement.classList.contains("dark") ||
         document.documentElement.getAttribute("data-theme") === "dark" ||
         window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+      if (provider === "claude") {
+        panel.setAttribute("data-theme", isDark ? "dark" : "light");
+        return;
+      }
 
       if (isDark) {
         Object.assign(panel.style, {
@@ -837,6 +1489,12 @@
         !document.getElementById("claude-usage-panel-bottom")
       )
         return;
+      if (provider === "claude") {
+        applyTheme();
+        renderClaudePanel();
+        startCountdown();
+        return;
+      }
       applyTheme();
 
       if ((provider === "claude" && !orgId) || (!usageData.lastFetch && !usageData.fetchError)) {
@@ -1033,6 +1691,10 @@
     function startCountdown() {
       if (countdownTimer) clearInterval(countdownTimer);
       countdownTimer = setInterval(() => {
+        if (provider === "claude") {
+          renderClaudePanel();
+          return;
+        }
         const rows = getUsageRows();
         panel
           ?.querySelectorAll("[data-usage-countdown]")
@@ -1344,7 +2006,7 @@
 
         document.body.appendChild(panel);
 
-        if (isMobileLayout() && !options.position) {
+        if (provider === "chatgpt" && isMobileLayout() && !options.position) {
           const mobilePos = getMobileAnchorPosition();
           savedPosition.left = mobilePos.left;
           savedPosition.right = null;
@@ -1358,7 +2020,7 @@
 
         // 恢复保存的位置（在添加到DOM后）
         const savedPos = localStorage.getItem(positionStorageKey);
-        if (savedPos && !options.position) {
+        if (provider === "chatgpt" && savedPos && !options.position) {
           try {
             const pos = JSON.parse(savedPos);
             let top = parseFloat(pos.top);
@@ -1406,21 +2068,25 @@
         }
 
         renderPanel();
-        enableDrag();
+        if (provider === "chatgpt") {
+          enableDrag();
 
-        panel.addEventListener("mouseenter", () => {
-          if (!isDragging) {
-            isHovered = true;
-            renderPanel();
-          }
-        });
+          panel.addEventListener("mouseenter", () => {
+            if (!isDragging) {
+              isHovered = true;
+              renderPanel();
+            }
+          });
 
-        panel.addEventListener("mouseleave", () => {
-          if (!isDragging) {
-            isHovered = false;
-            renderPanel();
-          }
-        });
+          panel.addEventListener("mouseleave", () => {
+            if (!isDragging) {
+              isHovered = false;
+              renderPanel();
+            }
+          });
+        } else {
+          applyClaudePosition();
+        }
 
         if (provider === "claude") {
           discoverOrgId().then(() => fetchUsage());
@@ -1460,8 +2126,16 @@
       }
       if (countdownTimer) clearInterval(countdownTimer);
       if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+      if (claudeAutoCollapseTimer) clearTimeout(claudeAutoCollapseTimer);
       if (refreshInterval) clearInterval(refreshInterval);
+      if (claudeDocumentClickHandler) {
+        document.removeEventListener("click", claudeDocumentClickHandler);
+      }
+      if (claudeKeyHandler) {
+        document.removeEventListener("keydown", claudeKeyHandler);
+      }
       panel = null;
+      claudeShadow = null;
       orgId = null;
       console.log(`[${panelTitle}] 小部件已销毁`);
     }
