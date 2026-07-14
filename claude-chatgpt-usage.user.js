@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.3.0
+// @version      1.4.0
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -436,6 +436,25 @@
       return known[raw.toLowerCase()] || raw;
     }
 
+    // 模型选择器与工作量（effort）菜单的英文词条：主翻译词库锁在 v1.0.0 tag，
+    // 新 UI 词条在这里增补。整节点精确匹配后替换，浮窗自身在 Shadow DOM 内不受影响。
+    const staticPhrases = {
+      "For your toughest challenges": "应对最棘手的挑战",
+      "For complex tasks": "适合复杂任务",
+      "Most efficient for everyday tasks": "日常任务最高效",
+      "Fastest for quick answers": "快速问答最迅捷",
+      "Higher effort means more thorough responses, but takes longer and uses your limits faster.":
+        "工作量越高，回答越详尽，但耗时更长、额度消耗也更快。",
+      "More models": "更多模型",
+      Effort: "工作量",
+      Low: "低",
+      Medium: "中",
+      High: "高",
+      Extra: "超高",
+      Max: "最高",
+      Default: "默认",
+    };
+
     function translate(value) {
       const original = String(value || "").trim();
       const text = original
@@ -443,6 +462,17 @@
         .replace(/\u00A0/g, " ")
         .replace(/[ \t]{2,}/g, " ");
       if (!text) return text;
+
+      if (Object.prototype.hasOwnProperty.call(staticPhrases, text)) {
+        return staticPhrases[text];
+      }
+
+      const includedMatch = text.match(
+        /^Included until\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)$/i,
+      );
+      if (includedMatch) {
+        return `${formatResetTime(includedMatch[1])}前可用`;
+      }
 
       const greetingMatch = text.match(
         /^(?:Good\s+)?(Morning|Afternoon|Evening),\s*(.*)$/i,
@@ -609,15 +639,12 @@
           /* ChatGPT 面板：位置由拖动逻辑内联管理，浮窗整体可拖拽 */
           :host { touch-action: none; cursor: move; }
           .compact-card { cursor: move; }
-          .title-badge {
-            background: linear-gradient(135deg, #1fc39a, #0d8a6a);
-            box-shadow: 0 2px 6px rgba(16, 163, 127, 0.35);
-          }
+          .title-badge { background: linear-gradient(135deg, #1fc39a, #0d8a6a); }
           .plan-badge { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
           .credit-list { flex: 0 0 auto; border-top: 1px solid var(--cu-divider); }
           .credit-item .quota-meta { margin-bottom: 0; }
           .credit-note {
-            margin: 8px 0 0 36px;
+            margin: 8px 0 0 33px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -767,7 +794,7 @@
             --cu-text-tertiary: #989ba1;
             --cu-border: rgba(32, 33, 36, 0.08);
             --cu-divider: rgba(32, 33, 36, 0.06);
-            --cu-shadow: 0 18px 44px rgba(31, 35, 41, 0.13), 0 2px 8px rgba(31, 35, 41, 0.06);
+            --cu-shadow: 0 10px 28px rgba(31, 35, 41, 0.10), 0 1px 3px rgba(31, 35, 41, 0.05);
             --cu-danger: #ef493d;
             --cu-transition: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
             position: fixed;
@@ -787,7 +814,7 @@
             --cu-text-tertiary: #8f9399;
             --cu-border: rgba(255, 255, 255, 0.10);
             --cu-divider: rgba(255, 255, 255, 0.07);
-            --cu-shadow: 0 18px 48px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
+            --cu-shadow: 0 10px 30px rgba(0, 0, 0, 0.38), 0 1px 3px rgba(0, 0, 0, 0.25);
             color-scheme: dark;
           }
           *, *::before, *::after { box-sizing: border-box; }
@@ -812,12 +839,12 @@
             transition: opacity var(--cu-transition), transform var(--cu-transition), visibility 0s linear 200ms;
           }
           .compact-card {
-            width: 104px;
-            padding: 8px;
+            width: 96px;
+            padding: 7px;
             display: grid;
-            gap: 6px;
+            gap: 5px;
             border: 1px solid var(--cu-border);
-            border-radius: 14px;
+            border-radius: 13px;
             background: var(--cu-bg);
             box-shadow: var(--cu-shadow);
             backdrop-filter: blur(12px) saturate(1.05);
@@ -829,21 +856,21 @@
             outline: 2px solid #4285f4;
             outline-offset: 2px;
           }
-          .compact-list { display: grid; gap: 6px; }
+          .compact-list { display: grid; gap: 5px; }
           .compact-row {
-            min-height: 34px;
-            padding: 0 10px;
+            min-height: 30px;
+            padding: 0 9px;
             display: grid;
             grid-template-columns: 1fr auto;
             align-items: center;
             gap: 8px;
-            border-radius: 10px;
+            border-radius: 9px;
             background: var(--cu-bg-soft);
           }
           .compact-row[data-danger] { background: var(--quota-soft, var(--cu-bg-soft)); }
           .compact-label { color: var(--cu-text-secondary); font-size: 12px; font-weight: 500; }
-          .compact-percent { color: var(--quota-color); font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
-          .compact-status { min-height: 34px; display: grid; place-items: center; color: var(--cu-text-secondary); font-size: 12px; }
+          .compact-percent { color: var(--quota-color); font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+          .compact-status { min-height: 30px; display: grid; place-items: center; color: var(--cu-text-secondary); font-size: 12px; }
           .expanded-card {
             width: min(304px, calc(100vw - 24px));
             max-height: calc(100vh - 32px);
@@ -851,7 +878,7 @@
             overflow: hidden;
             flex-direction: column;
             border: 1px solid var(--cu-border);
-            border-radius: 18px;
+            border-radius: 16px;
             background: var(--cu-bg);
             box-shadow: var(--cu-shadow);
             backdrop-filter: blur(12px) saturate(1.05);
@@ -859,23 +886,23 @@
           }
           .widget-header {
             flex: 0 0 auto;
-            min-height: 52px;
-            padding: 0 12px 0 16px;
+            min-height: 48px;
+            padding: 0 11px 0 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid var(--cu-divider);
           }
-          .widget-title { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
+          .widget-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
           .title-badge {
-            width: 22px;
-            height: 22px;
+            width: 20px;
+            height: 20px;
             display: grid;
             place-items: center;
-            border-radius: 7px;
+            border-radius: 6px;
             color: #fff;
           }
-          .title-badge svg { width: 13px; height: 13px; }
+          .title-badge svg { width: 12px; height: 12px; }
           .icon-button {
             width: 32px;
             height: 32px;
@@ -897,32 +924,32 @@
             background: var(--cu-bg-soft);
             white-space: nowrap;
           }
-          .quota-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0 5px; }
-          .quota-item { padding: 13px 16px 14px; }
+          .quota-list { flex: 1 1 auto; overflow-y: auto; padding: 3px 0 4px; }
+          .quota-item { padding: 11px 14px 12px; }
           .quota-meta {
             display: grid;
             grid-template-columns: auto minmax(0, 1fr) auto;
             align-items: center;
-            column-gap: 10px;
-            margin-bottom: 10px;
+            column-gap: 9px;
+            margin-bottom: 9px;
           }
           .quota-icon {
-            width: 26px;
-            height: 26px;
+            width: 24px;
+            height: 24px;
             display: grid;
             place-items: center;
-            border-radius: 8px;
+            border-radius: 7px;
             background: var(--quota-soft);
             background: color-mix(in srgb, var(--quota-color) 13%, transparent);
             color: var(--quota-color);
           }
           :host([data-theme="dark"]) .quota-icon { background: var(--quota-soft); background: color-mix(in srgb, var(--quota-color) 22%, transparent); }
-          .quota-icon svg { width: 15px; height: 15px; stroke-width: 2; }
+          .quota-icon svg { width: 14px; height: 14px; stroke-width: 2; }
           .quota-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cu-text); font-size: 13px; font-weight: 550; }
           .quota-remaining { color: var(--cu-text-tertiary); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
           .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; }
           .quota-track {
-            height: 7px;
+            height: 6px;
             overflow: hidden;
             border-radius: 999px;
             background: var(--quota-soft);
@@ -930,12 +957,12 @@
           }
           :host([data-theme="dark"]) .quota-track { background: var(--quota-soft); background: color-mix(in srgb, var(--quota-color) 24%, transparent); }
           .quota-fill { width: var(--remaining-percent); height: 100%; border-radius: inherit; background: var(--quota-color); transition: width 300ms ease; }
-          .quota-percent { min-width: 58px; text-align: right; color: var(--quota-color); font-size: 25px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+          .quota-percent { min-width: 52px; text-align: right; color: var(--quota-color); font-size: 22px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
           .expanded-status { min-height: 132px; display: grid; place-items: center; padding: 24px; color: var(--cu-text-secondary); text-align: center; }
           .widget-footer {
             flex: 0 0 auto;
-            min-height: 50px;
-            padding: 0 12px 0 16px;
+            min-height: 44px;
+            padding: 0 10px 0 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -987,13 +1014,10 @@
             transform: scale(0.96) translateY(6px);
           }
           .widget-header { cursor: pointer; }
-          .title-badge {
-            background: linear-gradient(135deg, #ff8a5c, #ff5f2e);
-            box-shadow: 0 2px 6px rgba(255, 95, 46, 0.35);
-          }
+          .title-badge { background: linear-gradient(135deg, #ff8a5c, #ff5f2e); }
           .settings-popover {
             position: absolute;
-            top: 60px;
+            top: 56px;
             right: 12px;
             z-index: 2;
             width: 256px;
@@ -1241,6 +1265,15 @@
       registerClaudeMenuCommands();
     }
 
+    // 健康度三档配色（沿用原版 claude2cn 阈值）：颜色表达"还剩多少"，
+    // 额度类型的区分交给条目图标（时钟/日历/火花），不再按类型固定配色。
+    function quotaHealthColors(remaining) {
+      const used = 100 - remaining;
+      if (used < 60) return ["#10b981", "rgba(16, 185, 129, 0.12)"];
+      if (used < 85) return ["#f59e0b", "rgba(245, 158, 11, 0.13)"];
+      return ["#ef4444", "rgba(239, 68, 68, 0.11)"];
+    }
+
     function getClaudeViewRows() {
       return getUsageRows()
         .filter(
@@ -1277,14 +1310,7 @@
                 : type === "fableFive"
                   ? "Fable 5 · 7 天配额"
                   : row.label;
-          const baseColors = {
-            fiveHour: ["#ff6b3d", "rgba(255, 107, 61, 0.10)"],
-            sevenDay: ["#18b96b", "rgba(24, 185, 107, 0.10)"],
-            fableFive: ["#4285f4", "rgba(66, 133, 244, 0.10)"],
-            model: ["#4285f4", "rgba(66, 133, 244, 0.10)"],
-          };
-          const [baseColor, baseSoft] = baseColors[type];
-          const isDanger = remaining <= 20;
+          const [color, softColor] = quotaHealthColors(remaining);
           const countdown = cdText(row.resets_at);
           return {
             ...row,
@@ -1295,8 +1321,8 @@
             critical: remaining <= 10,
             remainingText: countdown ? `${countdown} 剩余` : "剩余时间待定",
             resetText: fmtExpiryTime(row.resets_at),
-            color: isDanger ? "#ef493d" : baseColor,
-            softColor: isDanger ? "rgba(239, 73, 61, 0.10)" : baseSoft,
+            color,
+            softColor,
           };
         });
     }
@@ -1432,12 +1458,7 @@
         const remaining = 100 - used;
         const isWeekly = row.key === "primary" || row.key === "secondary";
         const type = isWeekly ? "weekly" : "model";
-        const baseColors = {
-          weekly: ["#10a37f", "rgba(16, 163, 127, 0.12)"],
-          model: ["#4285f4", "rgba(66, 133, 244, 0.10)"],
-        };
-        const [baseColor, baseSoft] = baseColors[type];
-        const isDanger = remaining <= 20;
+        const [color, softColor] = quotaHealthColors(remaining);
         const countdown = cdText(row.resets_at);
         return {
           ...row,
@@ -1449,8 +1470,8 @@
           critical: remaining <= 10,
           remainingText: countdown ? `${countdown} 剩余` : "剩余时间待定",
           resetText: fmtExpiryTime(row.resets_at),
-          color: isDanger ? "#ef493d" : baseColor,
-          softColor: isDanger ? "rgba(239, 73, 61, 0.10)" : baseSoft,
+          color,
+          softColor,
         };
       });
     }

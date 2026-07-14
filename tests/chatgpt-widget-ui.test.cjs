@@ -22,11 +22,26 @@ test("ChatGPT panel adopts the shared design language", () => {
   assert.doesNotMatch(panelSource, /rgb\(254, 252, 245\)/);
 });
 
-test("ChatGPT weekly quota renders with calendar icon and brand color", () => {
+test("ChatGPT weekly quota renders with calendar icon and health colors", () => {
   assert.match(source, /function getChatGPTViewRows\(\)/);
-  assert.match(source, /weekly: \["#10a37f", "rgba\(16, 163, 127, 0\.12\)"\]/);
   assert.match(source, /iconName: isWeekly \? "calendar" : "sparkles"/);
   assert.match(source, /fullLabel: isWeekly \? "每周使用限额"/);
+});
+
+test("quota colors follow remaining-health tiers shared by both providers", () => {
+  // 原版 claude2cn 的三档口径：已用 <60% 绿、<85% 琥珀、其余红。
+  const health = source.match(
+    /function quotaHealthColors\(remaining\)[\s\S]*?\n    \}/,
+  );
+  assert.ok(health, "quotaHealthColors should exist");
+  assert.match(health[0], /used < 60[\s\S]*?#10b981/);
+  assert.match(health[0], /used < 85[\s\S]*?#f59e0b/);
+  assert.match(health[0], /#ef4444/);
+  // 两端视图行都走健康度色，不再按额度类型固定配色。
+  const healthCalls =
+    source.match(/= quotaHealthColors\(remaining\)/g) || [];
+  assert.equal(healthCalls.length, 2);
+  assert.doesNotMatch(source, /baseColors/);
 });
 
 test("ChatGPT reset credits render as a dedicated block outside quota rows", () => {

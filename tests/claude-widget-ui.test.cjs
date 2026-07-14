@@ -9,8 +9,9 @@ const source = fs.readFileSync(
 );
 
 test("Claude widget follows the compact and expanded reference dimensions", () => {
-  assert.match(source, /\.compact-card\s*\{[\s\S]*?width:\s*104px;/);
-  assert.match(source, /\.compact-row\s*\{[\s\S]*?min-height:\s*34px;/);
+  // v1.4.0 轻盈化：收起卡 96px（规格上限 104px 内），行高 30px。
+  assert.match(source, /\.compact-card\s*\{[\s\S]*?width:\s*96px;/);
+  assert.match(source, /\.compact-row\s*\{[\s\S]*?min-height:\s*30px;/);
   assert.match(source, /\.expanded-card\s*\{[\s\S]*?304px/);
   // 高度由内容决定：空态/失败态不再被 min-height 撑出空白。
   assert.doesNotMatch(source, /\.expanded-card\s*\{[\s\S]*?min-height:\s*306px;/);

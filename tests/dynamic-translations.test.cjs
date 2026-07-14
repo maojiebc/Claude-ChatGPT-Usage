@@ -29,6 +29,46 @@ test("translates Claude time-of-day greetings with or without a name", () => {
   assert.equal(translations.translate("Good evening, Alice"), "晚上好，Alice");
 });
 
+test("translates model picker taglines and effort menu entries", () => {
+  assert.equal(
+    translations.translate("For your toughest challenges"),
+    "应对最棘手的挑战",
+  );
+  assert.equal(
+    translations.translate("Most efficient for everyday tasks"),
+    "日常任务最高效",
+  );
+  assert.equal(
+    translations.translate(
+      "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
+    ),
+    "工作量越高，回答越详尽，但耗时更长、额度消耗也更快。",
+  );
+  assert.equal(translations.translate("Low"), "低");
+  assert.equal(translations.translate("High"), "高");
+  assert.equal(translations.translate("Max"), "最高");
+  assert.equal(translations.translate("Default"), "默认");
+});
+
+test("translates the limited-time inclusion banner with dynamic dates", () => {
+  assert.equal(
+    translations.translate("Included until July 19"),
+    "7月19日前可用",
+  );
+  assert.equal(
+    translations.translate("Included until January 3, 2027"),
+    "2027年1月3日前可用",
+  );
+});
+
+test("does not hijack prototype keys or ordinary sentences", () => {
+  assert.equal(translations.translate("constructor"), "constructor");
+  assert.equal(
+    translations.translate("Maximum effort pays off"),
+    "Maximum effort pays off",
+  );
+});
+
 test("translates dynamic Fable usage and reset date", () => {
   assert.equal(
     translations.translate(
