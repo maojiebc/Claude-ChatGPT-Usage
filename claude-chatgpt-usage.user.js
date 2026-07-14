@@ -1,0 +1,1232 @@
+// ==UserScript==
+// @name         Claude & ChatGPT 中文汉化与用量显示
+// @namespace    https://github.com/maojiebc/Claude-ChatGPT-Usage/
+// @homepageURL  https://github.com/maojiebc/Claude-ChatGPT-Usage/
+// @supportURL   https://github.com/maojiebc/Claude-ChatGPT-Usage/issues
+// @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
+// @author       jyking (original), maojiebc (maintainer)
+// @copyright    2026, jyking and maojiebc
+// @version      1.0.0
+// @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
+// @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
+// @match        https://claude.ai/*
+// @match        https://chatgpt.com/*
+// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-design.user.js#sha256=19fefdebcb71584886bfa494aed0e54c4922860f01d9db367e838489ab8afb48
+// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-translations.user.js#sha256=587a5de6adf25d5aa19f1e6f58b5bb6181f31e5d89e49669a3c75a85df8ff61a
+// @grant        none
+// @license      MIT
+// @run-at       document-start
+// ==/UserScript==
+
+(function () {
+  "use strict";
+
+  const isClaudeSite = location.hostname === "claude.ai";
+  const isChatGPTSite = location.hostname === "chatgpt.com";
+
+  // 添加 CSS 变量
+  if (isClaudeSite) {
+    const style = document.createElement("style");
+    style.textContent = `
+      :root {
+        --font-anthropic-serif: "Anthropic Serif", Georgia, "Times New Roman", Times, "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", "Source Hans Serif CN", "Songti SC", SimSun, serif;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+      const url =
+        typeof args[0] === "string"
+          ? args[0]
+          : args[0] instanceof Request
+            ? args[0].url
+            : "";
+
+      if (
+        !url.includes("/i18n/en-US.json") &&
+        !url.includes("/i18n/statsig/en-US.json")
+      ) {
+        return originalFetch(...args);
+      }
+
+      const response = await originalFetch(...args);
+      const json = await response.json();
+
+      for (const key of Object.keys(json)) {
+        const val = json[key];
+        if (typeof val === "string" && TRANSLATIONS[val]) {
+          json[key] = TRANSLATIONS[val];
+        }
+      }
+
+      return new Response(JSON.stringify(json), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    };
+  }
+
+  // BEGIN USAGE_PARSERS — 保持为纯函数，便于离线测试未公开接口的响应兼容性。
+  const UsageParsers = (() => {
+    function asNumber(value) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && value.trim()) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    }
+
+    function firstNumber(...values) {
+      for (const value of values) {
+        const parsed = asNumber(value);
+        if (parsed !== null) return parsed;
+      }
+      return null;
+    }
+
+    function toTimestampMs(value) {
+      const numeric = asNumber(value);
+      if (numeric !== null) {
+        return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+      }
+      if (typeof value !== "string" || !value.trim()) return null;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function normalizeWindow(raw, defaultWindowMinutes = null) {
+      if (!raw || typeof raw !== "object") return null;
+      const utilization = firstNumber(
+        raw.utilization,
+        raw.used_percentage,
+        raw.used_percent,
+        raw.percent,
+      );
+      if (utilization === null) return null;
+      const seconds = firstNumber(
+        raw.limit_window_seconds,
+        raw.window_seconds,
+      );
+      const minutes = firstNumber(raw.window_minutes, raw.window_duration_minutes);
+      return {
+        utilization: Math.min(100, Math.max(0, utilization)),
+        resets_at:
+          raw.resets_at ?? raw.reset_at ?? raw.resetAt ?? raw.resetsAt ?? null,
+        window_minutes:
+          minutes ?? (seconds !== null ? seconds / 60 : defaultWindowMinutes),
+      };
+    }
+
+    function stringValue(value) {
+      return typeof value === "string" ? value.trim() : "";
+    }
+
+    function displayModelName(value) {
+      const name = stringValue(value);
+      return /^(?:claude[-_ ]?)?fable(?:[-_ ]?5)?$/i.test(name)
+        ? "Fable 5"
+        : name;
+    }
+
+    function parseClaude(data) {
+      const empty = {
+        fiveHour: null,
+        sevenDay: null,
+        modelLimits: [],
+        planName: "",
+        hit: false,
+        hasScopedSurface: false,
+      };
+      if (!data || typeof data !== "object") return empty;
+
+      let fiveHour = normalizeWindow(data.five_hour, 300);
+      let sevenDay = normalizeWindow(data.seven_day, 10_080);
+      const modelLimits = new Map();
+
+      function setModelLimit(name, raw, defaultWindowMinutes = 10_080) {
+        const modelName = displayModelName(name);
+        const window = normalizeWindow(raw, defaultWindowMinutes);
+        if (!modelName || !window) return;
+        modelLimits.set(modelName.toLowerCase(), { name: modelName, ...window });
+      }
+
+      setModelLimit(
+        "Fable 5",
+        data.seven_day_fable ?? data.fable_seven_day ?? data.fable_weekly,
+      );
+
+      if (Array.isArray(data.limits)) {
+        for (const limit of data.limits) {
+          if (!limit || typeof limit !== "object") continue;
+          const kind = stringValue(limit.kind).toLowerCase();
+          const group = stringValue(limit.group).toLowerCase();
+          const scopedModel =
+            limit.scope?.model?.display_name ??
+            limit.scope?.model?.name ??
+            limit.scope?.model?.id ??
+            (typeof limit.scope?.model === "string" ? limit.scope.model : "");
+          const windowMinutes =
+            group === "session" || kind === "session" ? 300 : 10_080;
+
+          if (stringValue(scopedModel)) {
+            setModelLimit(scopedModel, limit, windowMinutes);
+          } else if (!fiveHour && (kind === "session" || group === "session")) {
+            fiveHour = normalizeWindow(limit, 300);
+          } else if (
+            !sevenDay &&
+            (kind === "weekly_all" || group === "weekly")
+          ) {
+            sevenDay = normalizeWindow(limit, 10_080);
+          }
+        }
+      }
+
+      if (Array.isArray(data.rate_limits)) {
+        for (const item of data.rate_limits) {
+          if (!item || typeof item !== "object") continue;
+          const windowName = stringValue(
+            item.window_duration ?? item.type ?? item.kind,
+          ).toLowerCase();
+          const modelName =
+            item.scope?.model?.display_name ?? item.model?.display_name ?? "";
+          if (stringValue(modelName)) {
+            setModelLimit(modelName, item);
+          } else if (!fiveHour && /5h|five.?hour|session/.test(windowName)) {
+            fiveHour = normalizeWindow(item, 300);
+          } else if (!sevenDay && /7d|seven.?day|week/.test(windowName)) {
+            sevenDay = normalizeWindow(item, 10_080);
+          }
+        }
+      }
+
+      const result = {
+        fiveHour,
+        sevenDay,
+        modelLimits: [...modelLimits.values()],
+        planName: stringValue(
+          data.subscription_type ?? data.plan_name ?? data.plan,
+        ),
+        hasScopedSurface:
+          Array.isArray(data.limits) || modelLimits.size > 0,
+      };
+      return {
+        ...result,
+        hit: Boolean(
+          result.fiveHour || result.sevenDay || result.modelLimits.length,
+        ),
+      };
+    }
+
+    function parseChatGPT(data) {
+      const empty = {
+        fiveHour: null,
+        sevenDay: null,
+        modelLimits: [],
+        planName: "",
+        hit: false,
+      };
+      if (!data || typeof data !== "object") return empty;
+
+      const rateLimit = data.rate_limit ?? data.rateLimit ?? {};
+      const fiveHour = normalizeWindow(
+        rateLimit.primary_window ?? rateLimit.primaryWindow ?? data.primary,
+        300,
+      );
+      const sevenDay = normalizeWindow(
+        rateLimit.secondary_window ?? rateLimit.secondaryWindow ?? data.secondary,
+        10_080,
+      );
+      const modelLimits = [];
+
+      const additionalRateLimits = Array.isArray(data.additional_rate_limits)
+        ? data.additional_rate_limits
+        : [];
+      for (const extra of additionalRateLimits) {
+        if (!extra || typeof extra !== "object") continue;
+        const name = stringValue(extra.limit_name ?? extra.metered_feature);
+        const extraRate = extra.rate_limit ?? extra.rateLimit ?? {};
+        for (const [suffix, raw, fallbackMinutes] of [
+          ["主窗口", extraRate.primary_window ?? extraRate.primaryWindow, 300],
+          ["次窗口", extraRate.secondary_window ?? extraRate.secondaryWindow, 10_080],
+        ]) {
+          const window = normalizeWindow(raw, fallbackMinutes);
+          if (window) {
+            modelLimits.push({
+              name: name ? `${name} · ${suffix}` : suffix,
+              ...window,
+            });
+          }
+        }
+      }
+
+      const result = {
+        fiveHour,
+        sevenDay,
+        modelLimits,
+        planName: stringValue(data.plan_type ?? data.planType ?? data.plan),
+      };
+      return {
+        ...result,
+        hit: Boolean(
+          result.fiveHour || result.sevenDay || result.modelLimits.length,
+        ),
+      };
+    }
+
+    function merge(base, incoming) {
+      if (!base) return incoming;
+      const modelLimits = new Map();
+      for (const item of [...base.modelLimits, ...incoming.modelLimits]) {
+        modelLimits.set(item.name.toLowerCase(), item);
+      }
+      const merged = {
+        fiveHour: incoming.fiveHour ?? base.fiveHour,
+        sevenDay: incoming.sevenDay ?? base.sevenDay,
+        modelLimits: [...modelLimits.values()],
+        planName: incoming.planName || base.planName,
+        hasScopedSurface: Boolean(
+          base.hasScopedSurface || incoming.hasScopedSurface,
+        ),
+      };
+      return {
+        ...merged,
+        hit: Boolean(
+          merged.fiveHour || merged.sevenDay || merged.modelLimits.length,
+        ),
+      };
+    }
+
+    return Object.freeze({ parseClaude, parseChatGPT, merge, toTimestampMs });
+  })();
+  // END USAGE_PARSERS
+
+  const ClaudeUsageWidget = (() => {
+    "use strict";
+
+    const provider = isChatGPTSite ? "chatgpt" : "claude";
+    const panelTitle =
+      provider === "chatgpt" ? "ChatGPT / Codex 用量" : "Claude 用量监控";
+    const positionStorageKey =
+      provider === "chatgpt"
+        ? "claude2cn-chatgpt-usage-position"
+        : "claude-usage-position";
+
+    let orgId = null;
+    let autoRefreshTimer = null;
+    let refreshInterval = null;
+    let countdownTimer = null;
+    let isHovered = false;
+    let panel = null;
+    let isDragging = false;
+    let savedPosition = { left: null, right: 4, top: 50, isRight: true }; // 默认右上角
+
+    let usageData = {
+      provider,
+      fiveHour: null,
+      sevenDay: null,
+      modelLimits: [],
+      planName: "",
+      lastFetch: null,
+      fetchError: null,
+    };
+
+    const _origFetch = window.fetch.bind(window);
+
+    function hookFetch() {
+      window.fetch = function (...args) {
+        const url =
+          typeof args[0] === "string"
+            ? args[0]
+            : args[0] instanceof Request
+              ? args[0].url
+              : "";
+        captureOrgId(url);
+        return _origFetch(...args);
+      };
+
+      const _origXHROpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+        if (typeof url === "string") captureOrgId(url);
+        return _origXHROpen.call(this, method, url, ...rest);
+      };
+    }
+
+    function captureOrgId(url) {
+      if (!url) return;
+      const m = url.match(
+        /\/api\/organizations\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+      );
+      if (!m) return;
+      const newId = m[1];
+      if (orgId !== newId) {
+        orgId = newId;
+        console.log("[Claude用量] orgId 已获取:", orgId);
+      }
+      if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+      autoRefreshTimer = setTimeout(fetchUsage, 600);
+    }
+
+    async function discoverOrgId() {
+      if (provider !== "claude") return true;
+      if (orgId) return true;
+      const candidates = [
+        "https://claude.ai/api/bootstrap",
+        // "https://claude.ai/api/organizations",
+      ];
+      for (const url of candidates) {
+        try {
+          const res = await _origFetch(url, {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const str = JSON.stringify(data);
+          const m = str.match(
+            /"(?:uuid|id|organization_id)"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/i,
+          );
+          if (m && !orgId) {
+            orgId = m[1];
+            console.log(`[Claude用量] 从 ${url} 获取 orgId`, orgId);
+            return true;
+          }
+        } catch {}
+      }
+      return false;
+    }
+
+    function createPanel() {
+      const metrics = getPanelMetrics();
+      panel = document.createElement("div");
+      panel.id = "claude-usage-panel-bottom";
+      Object.assign(panel.style, {
+        position: "fixed",
+        top: "50px",
+        right: metrics.defaultRight + "px",
+        zIndex: "1000",
+        background: "rgb(254, 252, 245)",
+        border: "1px solid rgb(240, 235, 225)",
+        borderRadius: metrics.borderRadius,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        color: "rgb(80, 75, 65)",
+        padding: metrics.padding,
+        width: "auto",
+        minWidth: metrics.minWidth + "px",
+        userSelect: "none",
+        boxShadow: "none",
+        cursor: "move",
+        transition: "all 0.2s ease",
+        touchAction: "none",
+      });
+      return panel;
+    }
+
+    function applyTheme() {
+      if (!panel) return;
+      const isDark =
+        document.documentElement.classList.contains("dark") ||
+        document.documentElement.getAttribute("data-theme") === "dark" ||
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+      if (isDark) {
+        Object.assign(panel.style, {
+          background: "rgb(40, 38, 35)",
+          borderColor: "rgb(60, 55, 50)",
+          color: "rgb(200, 195, 185)",
+        });
+      } else {
+        Object.assign(panel.style, {
+          background: "rgb(254, 252, 245)",
+          borderColor: "rgb(240, 235, 225)",
+          color: "rgb(80, 75, 65)",
+        });
+      }
+    }
+
+    function pct(v) {
+      return Math.min(100, Math.max(0, Math.round(v || 0)));
+    }
+
+    function clr(p) {
+      return p < 60 ? "#10b981" : p < 85 ? "#f59e0b" : "#ef4444";
+    }
+
+    function clrDark(p) {
+      return p < 60 ? "#34d399" : p < 85 ? "#fbbf24" : "#f87171";
+    }
+
+    function cdText(ts) {
+      const target = UsageParsers.toTimestampMs(ts);
+      if (target === null) return "";
+      const diff = target - Date.now();
+      if (diff <= 0) return "已重置";
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+
+    function fmtTime(ts) {
+      const timestamp = UsageParsers.toTimestampMs(ts);
+      if (timestamp === null) return "—";
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return "—";
+      return d.toLocaleString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(
+        /[&<>'"]/g,
+        (char) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "'": "&#39;",
+            '"': "&quot;",
+          })[char],
+      );
+    }
+
+    function durationLabels(window, fallbackLabel, fallbackShort) {
+      const minutes = Number(window?.window_minutes);
+      if (!Number.isFinite(minutes) || minutes <= 0) {
+        return { label: fallbackLabel, short: fallbackShort };
+      }
+      if (minutes % 1440 === 0) {
+        const days = minutes / 1440;
+        return { label: `${days}天配额`, short: `${days}d` };
+      }
+      if (minutes % 60 === 0) {
+        const hours = minutes / 60;
+        return { label: `${hours}小时窗口`, short: `${hours}h` };
+      }
+      return { label: `${Math.round(minutes)}分钟窗口`, short: `${Math.round(minutes)}m` };
+    }
+
+    function getUsageRows() {
+      const rows = [];
+      if (usageData.fiveHour) {
+        const labels = durationLabels(
+          usageData.fiveHour,
+          "5小时窗口",
+          "5h",
+        );
+        rows.push({
+          key: "primary",
+          icon: "⚡",
+          ...labels,
+          ...usageData.fiveHour,
+        });
+      }
+      if (usageData.sevenDay) {
+        const labels = durationLabels(
+          usageData.sevenDay,
+          "7天配额",
+          "7d",
+        );
+        rows.push({
+          key: "secondary",
+          icon: "📅",
+          ...labels,
+          ...usageData.sevenDay,
+        });
+      }
+      usageData.modelLimits.forEach((item, index) => {
+        const labels = durationLabels(item, "模型配额", "模型");
+        const name = item.name || "模型";
+        rows.push({
+          key: `model-${index}`,
+          icon: "🧠",
+          label: `${name} · ${labels.label}`,
+          short: /^Fable 5$/i.test(name) ? "Fable" : name.slice(0, 8),
+          ...item,
+        });
+      });
+      return rows;
+    }
+
+    function isMobileLayout() {
+      return window.innerWidth <= 768;
+    }
+
+    function getPanelMetrics() {
+      if (isMobileLayout()) {
+        return {
+          defaultRight: null,
+          collapsedWidth: 32,
+          expandedWidth: Math.min(200, window.innerWidth - 16),
+          minWidth: 32,
+          padding: "3px 2px",
+          borderRadius: "4px",
+        };
+      }
+      return {
+        defaultRight: 8,
+        collapsedWidth: 56,
+        expandedWidth: 200,
+        minWidth: 56,
+        padding: "8px 10px",
+        borderRadius: "6px",
+      };
+    }
+
+    function getMobileAnchorPosition() {
+      return {
+        left: Math.round(window.innerWidth * 0.64),
+        top: 4,
+      };
+    }
+
+    function renderPanel() {
+      if (
+        !document.body ||
+        !panel ||
+        !document.getElementById("claude-usage-panel-bottom")
+      )
+        return;
+      applyTheme();
+
+      if ((provider === "claude" && !orgId) || (!usageData.lastFetch && !usageData.fetchError)) {
+        panel.title = `${panelTitle}：正在获取`;
+        panel.innerHTML = `
+        <div style="font-size:10px;opacity:0.6;text-align:center;">
+          ⏳
+        </div>`;
+        return;
+      }
+
+      if (usageData.fetchError) {
+        panel.title = usageData.fetchError;
+        panel.innerHTML = `
+        <div style="font-size:12px;opacity:0.7;text-align:center;">⚠️</div>`;
+        return;
+      }
+
+      panel.title = panelTitle;
+      const rows = getUsageRows();
+      if (!rows.length) {
+        panel.innerHTML = `<div style="font-size:10px;opacity:0.6;text-align:center;">暂无额度</div>`;
+        return;
+      }
+
+      const isDark =
+        document.documentElement.classList.contains("dark") ||
+        document.documentElement.getAttribute("data-theme") === "dark" ||
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const isMobile = isMobileLayout();
+
+      const textMuted = isDark
+        ? "rgba(200, 195, 185, 0.6)"
+        : "rgba(80, 75, 65, 0.6)";
+      const metrics = getPanelMetrics();
+
+      // 判断面板是否靠近右侧
+      const rect = panel.getBoundingClientRect();
+      const isNearRight =
+        savedPosition.isRight !== null
+          ? savedPosition.isRight
+          : rect.left > window.innerWidth / 2;
+
+      // 使用保存的位置或当前位置
+      let currentLeft, currentRight;
+      if (isNearRight) {
+        currentRight =
+          savedPosition.right !== null
+            ? savedPosition.right
+            : window.innerWidth - rect.right;
+      } else {
+        currentLeft =
+          savedPosition.left !== null ? savedPosition.left : rect.left;
+      }
+      const currentTop =
+        savedPosition.top !== null ? savedPosition.top : rect.top;
+
+      if (isHovered) {
+        const expandedWidth = metrics.expandedWidth;
+
+        panel.style.top = currentTop + "px";
+        panel.style.bottom = "auto";
+        panel.style.padding = metrics.padding;
+        panel.style.borderRadius = metrics.borderRadius;
+
+        if (isNearRight) {
+          // 靠右时向左展开，保持右边缘不变
+          panel.style.right = Math.max(0, currentRight) + "px";
+          panel.style.left = "auto";
+        } else {
+          // 靠左时向右展开，保持左边缘不变
+          const maxLeft = Math.max(0, window.innerWidth - expandedWidth);
+          panel.style.left = Math.max(0, Math.min(currentLeft, maxLeft)) + "px";
+          panel.style.right = "auto";
+        }
+
+        panel.style.width = expandedWidth + "px";
+        panel.style.minWidth = expandedWidth + "px";
+
+        const plan = usageData.planName
+          ? `<div style="font-size:8px;color:${textMuted};margin-top:2px;">${escapeHtml(usageData.planName)}</div>`
+          : "";
+        const expandedRows = rows
+          .map((row, index) => {
+            const used = pct(row.utilization);
+            const remain = 100 - used;
+            const color = isDark ? clrDark(used) : clr(used);
+            return `
+          <div>
+            <div style="font-size:9px;color:${textMuted};margin-bottom:3px;">${row.icon} ${escapeHtml(row.label)}</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
+              <span style="font-size:11px;opacity:0.7;">剩余</span>
+              <span style="font-size:16px;font-weight:600;color:${color};">${remain}%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:8px;opacity:0.6;">
+              <span>已用 ${used}%</span>
+              <span>${fmtTime(row.resets_at)}</span>
+            </div>
+            <div data-usage-countdown="${index}" style="font-size:8px;color:${color};margin-top:2px;text-align:right;">${cdText(row.resets_at)}</div>
+          </div>`;
+          })
+          .join("");
+
+        panel.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="font-size:11px;font-weight:600;opacity:0.8;text-align:center;border-bottom:1px solid ${textMuted};padding-bottom:6px;">${escapeHtml(panelTitle)}${plan}</div>
+          ${expandedRows}
+        </div>
+      `;
+      } else {
+        const collapsedWidth = metrics.collapsedWidth;
+        panel.style.padding = metrics.padding;
+        panel.style.borderRadius = metrics.borderRadius;
+        panel.style.top = currentTop + "px";
+        panel.style.bottom = "auto";
+
+        if (isNearRight) {
+          // 靠右时保持右对齐收起
+          panel.style.right = Math.max(0, currentRight) + "px";
+          panel.style.left = "auto";
+        } else {
+          // 靠左时保持左对齐收起
+          const maxLeft = Math.max(0, window.innerWidth - collapsedWidth);
+          panel.style.left = Math.max(0, Math.min(currentLeft, maxLeft)) + "px";
+          panel.style.right = "auto";
+        }
+
+        panel.style.width = collapsedWidth + "px";
+        panel.style.minWidth = collapsedWidth + "px";
+
+        const collapsedRows = rows
+          .map((row, index) => {
+            const used = pct(row.utilization);
+            const remain = 100 - used;
+            const color = isDark ? clrDark(used) : clr(used);
+            const divider =
+              index === rows.length - 1
+                ? ""
+                : `<div style="width:${isMobile ? 14 : 30}px;height:1px;background:${textMuted};opacity:0.3;"></div>`;
+            return `
+          <div style="text-align:center;">
+            <div style="font-size:${isMobile ? 7 : 8}px;color:${textMuted};margin-bottom:2px;max-width:${collapsedWidth - 4}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(row.short)}</div>
+            <div style="font-size:${isMobile ? 11 : 16}px;font-weight:600;color:${color};line-height:1.05;">${remain}%</div>
+            ${isMobile ? "" : `<div data-usage-countdown="${index}" style="font-size:8px;color:${textMuted};margin-top:2px;">${cdText(row.resets_at)}</div>`}
+          </div>
+          ${divider}`;
+          })
+          .join("");
+
+        panel.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:${isMobile ? 2 : 8}px;align-items:center;">
+          ${collapsedRows}
+        </div>
+      `;
+      }
+
+      startCountdown();
+    }
+
+    function startCountdown() {
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(() => {
+        const rows = getUsageRows();
+        panel
+          ?.querySelectorAll("[data-usage-countdown]")
+          .forEach((element) => {
+            const index = Number(element.getAttribute("data-usage-countdown"));
+            element.textContent = cdText(rows[index]?.resets_at);
+          });
+      }, 30000);
+    }
+
+    async function fetchUsage() {
+      usageData.fetchError = null;
+      renderPanel();
+      try {
+        const snapshot =
+          provider === "chatgpt"
+            ? await fetchChatGPTUsage()
+            : await fetchClaudeUsage();
+        if (!snapshot?.hit) throw new Error("接口未返回可识别的额度窗口");
+        usageData.fiveHour = snapshot.fiveHour;
+        usageData.sevenDay = snapshot.sevenDay;
+        usageData.modelLimits = snapshot.modelLimits;
+        usageData.planName = snapshot.planName;
+        usageData.lastFetch = Date.now();
+        usageData.fetchError = null;
+      } catch (error) {
+        const prefix = provider === "chatgpt" ? "ChatGPT/Codex" : "Claude";
+        const message = error instanceof Error ? error.message : String(error);
+        usageData.fetchError = `${prefix} 用量获取失败：${message}`;
+        console.warn(`[${prefix}用量]`, error);
+      }
+      renderPanel();
+    }
+
+    async function fetchClaudeUsage() {
+      if (!orgId) {
+        await discoverOrgId();
+        if (!orgId) throw new Error("未找到组织 ID，请刷新 Claude 页面");
+      }
+      const endpoints = [
+        `https://claude.ai/api/organizations/${orgId}/usage`,
+        `https://claude.ai/api/organizations/${orgId}/rate_limit_status`,
+        `https://claude.ai/api/organizations/${orgId}/limits`,
+      ];
+      let merged = null;
+      let lastError = null;
+      for (const url of endpoints) {
+        try {
+          const res = await _origFetch(url, {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+          if (res.status === 404) continue;
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const parsed = UsageParsers.parseClaude(data);
+          if (parsed.hit) merged = UsageParsers.merge(merged, parsed);
+          // 新版 /usage 已携带 limits[]，无需再重复请求旧的回退接口。
+          if (url.endsWith("/usage") && parsed.hasScopedSurface) break;
+        } catch (error) {
+          lastError = error;
+          console.warn("[Claude用量] 接口失败:", url, error.message);
+        }
+      }
+      if (merged?.hit) return merged;
+      throw lastError ?? new Error("所有用量接口均不可用");
+    }
+
+    function decodeJwtPayload(token) {
+      try {
+        const encoded = token.split(".")[1];
+        if (!encoded) return {};
+        const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized.padEnd(
+          normalized.length + ((4 - (normalized.length % 4)) % 4),
+          "=",
+        );
+        return JSON.parse(atob(padded));
+      } catch {
+        return {};
+      }
+    }
+
+    function findChatGPTAccountId(session, accessToken) {
+      const claims = decodeJwtPayload(accessToken);
+      const authClaims = claims["https://api.openai.com/auth"] ?? {};
+      return (
+        session.account?.id ??
+        session.accountId ??
+        session.account_id ??
+        session.user?.accountId ??
+        session.user?.account_id ??
+        authClaims.chatgpt_account_id ??
+        claims.chatgpt_account_id ??
+        ""
+      );
+    }
+
+    async function fetchChatGPTSession() {
+      const response = await _origFetch("https://chatgpt.com/api/auth/session", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(`登录状态接口 HTTP ${response.status}`);
+      const session = await response.json();
+      const accessToken = session.accessToken ?? session.access_token;
+      if (!accessToken) throw new Error("请先登录 chatgpt.com");
+      return {
+        accessToken,
+        accountId: findChatGPTAccountId(session, accessToken),
+      };
+    }
+
+    async function fetchChatGPTUsage() {
+      const { accessToken, accountId } = await fetchChatGPTSession();
+      const headers = {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      };
+      if (accountId) headers["ChatGPT-Account-Id"] = accountId;
+
+      const endpoints = [
+        "https://chatgpt.com/backend-api/codex/usage",
+        "https://chatgpt.com/backend-api/wham/usage",
+        "https://chatgpt.com/api/codex/usage",
+      ];
+      let lastError = null;
+      for (const url of endpoints) {
+        try {
+          const response = await _origFetch(url, {
+            credentials: "include",
+            headers,
+          });
+          if (response.status === 404) continue;
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(`HTTP ${response.status}，当前账号可能没有 Codex 权限`);
+          }
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const parsed = UsageParsers.parseChatGPT(await response.json());
+          if (parsed.hit) return parsed;
+          lastError = new Error("接口响应中没有额度窗口");
+        } catch (error) {
+          lastError = error;
+          console.warn("[ChatGPT/Codex用量] 接口失败:", url, error.message);
+        }
+      }
+      throw lastError ?? new Error("所有用量接口均不可用");
+    }
+
+    function enableDrag() {
+      if (!panel) return;
+
+      let startX, startY, startLeft, startTop, pointerMoved;
+
+      panel.addEventListener("pointerdown", (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        isDragging = true;
+        pointerMoved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        // 获取当前位置
+        const rect = panel.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop = rect.top;
+
+        panel.style.transition = "none";
+        panel.style.cursor = "grabbing";
+        panel.setPointerCapture?.(e.pointerId);
+      });
+
+      document.addEventListener("pointermove", (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+          pointerMoved = true;
+          isHovered = false;
+        }
+
+        let newLeft = startLeft + deltaX;
+        let newTop = startTop + deltaY;
+
+        // 边界限制 - 使用当前布局的收起宽度作为基准
+        const collapsedWidth = getPanelMetrics().collapsedWidth;
+        const maxLeft = window.innerWidth - collapsedWidth;
+        const maxTop = window.innerHeight - panel.offsetHeight;
+
+        newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+        newTop = Math.max(0, Math.min(newTop, maxTop));
+
+        panel.style.left = newLeft + "px";
+        panel.style.top = newTop + "px";
+        panel.style.right = "auto";
+        panel.style.bottom = "auto";
+      });
+
+      document.addEventListener("pointerup", (e) => {
+        if (isDragging) {
+          isDragging = false;
+          panel.style.transition = "all 0.2s ease";
+          panel.style.cursor = "move";
+          panel.releasePointerCapture?.(e.pointerId);
+
+          // 保存实际位置坐标和对齐方式
+          const rect = panel.getBoundingClientRect();
+          const isRight = rect.left > window.innerWidth / 2;
+
+          if (isRight) {
+            // 在右边时保存距右边的距离
+            savedPosition.right = window.innerWidth - rect.right;
+            savedPosition.left = null;
+          } else {
+            // 在左边时保存距左边的距离
+            savedPosition.left = rect.left;
+            savedPosition.right = null;
+          }
+
+          savedPosition.top = rect.top;
+          savedPosition.isRight = isRight;
+
+          // 保存到 localStorage
+          localStorage.setItem(
+            positionStorageKey,
+            JSON.stringify({
+              left: savedPosition.left,
+              right: savedPosition.right,
+              top: rect.top,
+              isRight: isRight,
+            }),
+          );
+
+          if (!pointerMoved && e.pointerType !== "mouse") {
+            isHovered = !isHovered;
+          }
+
+          // 重新渲染以调整展开方向
+          renderPanel();
+        }
+      });
+
+      document.addEventListener("pointercancel", (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        panel.style.transition = "all 0.2s ease";
+        panel.style.cursor = "move";
+        panel.releasePointerCapture?.(e.pointerId);
+        renderPanel();
+      });
+    }
+
+    function init(options = {}) {
+      if (document.getElementById("claude-usage-panel-bottom")) {
+        console.warn(`[${panelTitle}] 小部件已存在`);
+        return;
+      }
+
+      if (provider === "claude") hookFetch();
+      panel = createPanel();
+
+      // 支持自定义位置覆盖
+      if (options.position) {
+        const position = options.position;
+        if (position.bottom) panel.style.bottom = position.bottom;
+        if (position.left) panel.style.left = position.left;
+        if (position.top) panel.style.top = position.top;
+        if (position.right) panel.style.right = position.right;
+      }
+
+      const initWhenReady = () => {
+        if (!document.body) {
+          setTimeout(initWhenReady, 100);
+          return;
+        }
+
+        document.body.appendChild(panel);
+
+        if (isMobileLayout() && !options.position) {
+          const mobilePos = getMobileAnchorPosition();
+          savedPosition.left = mobilePos.left;
+          savedPosition.right = null;
+          savedPosition.top = mobilePos.top;
+          savedPosition.isRight = false;
+          panel.style.left = mobilePos.left + "px";
+          panel.style.top = mobilePos.top + "px";
+          panel.style.right = "auto";
+          panel.style.bottom = "auto";
+        }
+
+        // 恢复保存的位置（在添加到DOM后）
+        const savedPos = localStorage.getItem(positionStorageKey);
+        if (savedPos && !options.position) {
+          try {
+            const pos = JSON.parse(savedPos);
+            let top = parseFloat(pos.top);
+            let isRight = pos.isRight !== undefined ? pos.isRight : false;
+
+            // 边界检查和修正
+            const maxTop = window.innerHeight - 100;
+            if (top > maxTop) top = maxTop;
+            if (top < 0) top = 0;
+
+            savedPosition.top = top;
+            savedPosition.isRight = isRight;
+
+            if (isRight && pos.right !== null && pos.right !== undefined) {
+              // 恢复右对齐位置
+              let right = parseFloat(pos.right);
+              const maxRight = window.innerWidth - getPanelMetrics().collapsedWidth;
+              if (right > maxRight) right = maxRight;
+              if (right < 0) right = 0;
+
+              savedPosition.right = right;
+              savedPosition.left = null;
+
+              panel.style.right = right + "px";
+              panel.style.left = "auto";
+            } else if (pos.left !== null && pos.left !== undefined) {
+              // 恢复左对齐位置
+              let left = parseFloat(pos.left);
+              const maxLeft = window.innerWidth - getPanelMetrics().collapsedWidth;
+              if (left > maxLeft) left = maxLeft;
+              if (left < 0) left = 0;
+
+              savedPosition.left = left;
+              savedPosition.right = null;
+
+              panel.style.left = left + "px";
+              panel.style.right = "auto";
+            }
+
+            panel.style.top = top + "px";
+            panel.style.bottom = "auto";
+          } catch (e) {
+            console.warn(`[${panelTitle}] 恢复位置失败`, e);
+          }
+        }
+
+        renderPanel();
+        enableDrag();
+
+        panel.addEventListener("mouseenter", () => {
+          if (!isDragging) {
+            isHovered = true;
+            renderPanel();
+          }
+        });
+
+        panel.addEventListener("mouseleave", () => {
+          if (!isDragging) {
+            isHovered = false;
+            renderPanel();
+          }
+        });
+
+        if (provider === "claude") {
+          discoverOrgId().then(() => fetchUsage());
+        } else {
+          fetchUsage();
+        }
+
+        refreshInterval = setInterval(() => {
+          if (provider === "chatgpt" || orgId) fetchUsage();
+        }, 65000);
+
+        const themeObserver = new MutationObserver(applyTheme);
+        themeObserver.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class", "data-theme"],
+        });
+        window
+          .matchMedia("(prefers-color-scheme: dark)")
+          .addEventListener("change", applyTheme);
+
+        console.log(
+          `%c✅ ${panelTitle}小部件已启动`,
+          "color:#10b981;font-weight:600;font-size:13px",
+        );
+      };
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initWhenReady);
+      } else {
+        initWhenReady();
+      }
+    }
+
+    function destroy() {
+      if (panel && panel.parentNode) {
+        panel.parentNode.removeChild(panel);
+      }
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+      if (refreshInterval) clearInterval(refreshInterval);
+      panel = null;
+      orgId = null;
+      console.log(`[${panelTitle}] 小部件已销毁`);
+    }
+
+    return {
+      init,
+      destroy,
+      getUsageData: () => usageData,
+    };
+  })();
+
+  ClaudeUsageWidget.init();
+
+  if (isClaudeSite) {
+    // Design 页面 DOM 翻译（/design 路径字符串打包在 JS bundle 中，无 i18n fetch 可拦截）
+    // Observer 无条件启动以支持 SPA 内导航；路径检查移到回调内部
+    function translateAttrs(el) {
+    for (const attr of ["title", "placeholder", "aria-label"]) {
+      const val = el.getAttribute(attr);
+      if (val && DESIGN_TRANSLATIONS[val]) {
+        el.setAttribute(attr, DESIGN_TRANSLATIONS[val]);
+      }
+    }
+  }
+
+    function translateNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.nodeValue && node.nodeValue.trim();
+      if (t && DESIGN_TRANSLATIONS[t]) {
+        node.nodeValue = node.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      translateAttrs(node);
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = walker.nextNode())) {
+        const t = n.nodeValue && n.nodeValue.trim();
+        if (t && DESIGN_TRANSLATIONS[t]) {
+          n.nodeValue = n.nodeValue.replace(t, DESIGN_TRANSLATIONS[t]);
+        }
+      }
+      node.querySelectorAll("[title],[placeholder],[aria-label]").forEach(translateAttrs);
+    }
+  }
+
+    const designObserver = new MutationObserver((mutations) => {
+    if (!location.pathname.startsWith("/design")) return;
+    for (const m of mutations) {
+      if (m.type === "attributes" && m.target.nodeType === Node.ELEMENT_NODE) {
+        translateAttrs(m.target);
+      } else {
+        for (const node of m.addedNodes) {
+          translateNode(node);
+        }
+      }
+    }
+  });
+
+    function initDesignTranslator() {
+    if (location.pathname.startsWith("/design")) {
+      translateNode(document.body);
+    }
+    designObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["title", "placeholder", "aria-label"],
+    });
+  }
+
+    if (document.body) {
+      initDesignTranslator();
+    } else {
+      document.addEventListener("DOMContentLoaded", initDesignTranslator);
+    }
+  }
+
+})();

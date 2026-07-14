@@ -1,110 +1,77 @@
-# Claude2CN — Claude.ai 中文汉化
+# Claude-ChatGPT-Usage
 
-> 为 Claude.ai 提供完整中文界面的油猴脚本，支持用量实时显示、暗色模式、移动端适配。
+> Claude.ai 完整中文汉化，以及 Claude、Fable 5、ChatGPT/Codex 订阅额度显示。
 
-[![GitHub](https://img.shields.io/badge/GitHub-jyking%2Fclaude2cn-blue?logo=github)](https://github.com/jyking/claude2cn)
-[![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安装脚本-orange)](https://greasyfork.org/zh-CN/scripts/570390)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Userscript](https://img.shields.io/badge/Tampermonkey-Userscript-black?logo=tampermonkey)](https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/main/claude-chatgpt-usage.user.js)
 
----
+## 功能
 
-## 功能特点
+- **Claude.ai 完整中文汉化**：保留原项目 10,000+ 行翻译词条，覆盖 Claude Code、Artifacts、Projects、Cowork、Claude Design 等界面。
+- **Claude 额度显示**：显示 5 小时窗口、7 日总额度和 Fable 5 独立周额度。
+- **新旧接口兼容**：同时解析新版 `limits[]`、旧版 `seven_day_fable`、`fable_weekly` 等字段。
+- **ChatGPT/Codex 额度显示**：显示当前 ChatGPT 登录账号的 Codex 主窗口、次窗口、套餐类型及额外模型额度。
+- **真实周期识别**：根据接口返回自动显示 5 小时、1 天、7 天或 30 天等周期。
+- **可拖动面板**：支持桌面端和移动端触控拖动，位置分别保存在 Claude.ai 与 ChatGPT 域名下。
+- **明暗主题适配**：自动跟随页面或系统主题。
 
-- **完整汉化**：覆盖 Claude.ai 全界面，包括 Claude Code、Artifacts、**Claude Design**、Projects、Cowork 等所有功能模块，内置 10,000+ 行翻译词条。
-- **用量实时显示**：悬浮面板实时显示 5 小时与 7 日用量占比、套餐名称及重置倒计时。
-- **面板可拖动**：用量面板支持鼠标和触摸拖拽，位置自动记忆（桌面端 & iPad）。
-- **暗色模式适配**：随系统/页面主题自动切换面板配色。
-- **移动端适配**：响应式布局，手机浏览器下同样可正常使用。
-- **轻量高性能**：仅拦截 i18n 接口，不注入额外框架，不影响页面加载。
-- **持续更新**：紧跟 Claude.ai 版本迭代，新功能上线即补充翻译。
+## 安装
 
----
+### Tampermonkey / Violentmonkey
 
-## 安装方法
+1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)。
+2. 点击安装：[claude-chatgpt-usage.user.js](https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/main/claude-chatgpt-usage.user.js)。
+3. 刷新 [Claude.ai](https://claude.ai/) 或 [ChatGPT](https://chatgpt.com/)。
 
-### 第一步：安装脚本管理器
+Greasy Fork 安装地址将在首次发布后补充。
 
-在浏览器中安装油猴（用户脚本管理器）扩展：
+## 显示内容
 
-| 扩展 | Chrome / Edge | Firefox | Safari |
-|------|--------------|---------|--------|
-| [Tampermonkey（油猴）](https://www.tampermonkey.net/) | ✅ | ✅ | ✅ |
-| [Violentmonkey（暴力猴）](https://violentmonkey.github.io/) | ✅ | ✅ | — |
+### Claude.ai
 
-### 第二步：安装脚本
+- 5 小时滚动窗口
+- 7 日总额度
+- Fable 5 独立周额度（账号具备该额度时显示）
+- Claude.ai 中文界面与 Claude Design 中文翻译
 
-**方式 A — 通过 Greasy Fork 一键安装（推荐）**
+### ChatGPT
 
-点击下方链接，在 Greasy Fork 页面点击「安装此脚本」：
+- Codex 主额度窗口
+- Codex 次额度窗口
+- 接口返回的额外模型额度
+- ChatGPT 套餐类型
 
-👉 **[https://greasyfork.org/zh-CN/scripts/570390-claude-570390-claude-中文汉化-用量显示-claude-ai](https://greasyfork.org/zh-CN/scripts/570390-claude-%E4%B8%AD%E6%96%87%E6%B1%89%E5%8C%96-%E7%94%A8%E9%87%8F%E6%98%BE%E7%A4%BA-claude-ai)**
+> ChatGPT 侧显示的是 Codex 订阅额度，不是普通聊天模型的消息次数上限。
 
-**方式 B — 通过 GitHub Raw 安装**
+## 隐私与安全
 
-在脚本管理器中选择「从 URL 安装」，粘贴：
-
-```
-https://raw.githubusercontent.com/jyking/claude2cn/main/claude2cn.user.js
-```
-
-**方式 C — 手动安装**
-
-1. 下载本仓库中的 [`claude2cn.user.js`](https://github.com/jyking/claude2cn/raw/main/claude2cn.user.js) 文件。
-2. 在脚本管理器中选择「创建新脚本」，将文件内容粘贴进去保存。
-
-### 第三步：刷新页面
-
-访问 [claude.ai](https://claude.ai/)，脚本自动生效。如未生效，请硬刷新（Ctrl+Shift+R / Cmd+Shift+R）。
-
----
-
-## 用量面板说明
-
-脚本会在页面右上角显示一个可拖动的用量面板：
-
-- **5h 用量**：当前 5 小时滚动窗口内的用量占比及重置倒计时
-- **7d 用量**：当前 7 日滚动窗口内的用量占比及重置倒计时
-- 颜色含义：🟢 < 60%　🟡 60–85%　🔴 > 85%
-- 面板可拖动到任意位置，刷新后位置保留
-
----
-
-## 项目地址
-
-| 资源 | 链接 |
-|------|------|
-| GitHub 仓库 | [github.com/jyking/claude2cn](https://github.com/jyking/claude2cn) |
-| Greasy Fork（安装页） | [greasyfork.org/zh-CN/scripts/539526](https://greasyfork.org/zh-CN/scripts/539526) |
-| Fork 本仓库 | [github.com/jyking/claude2cn/fork](https://github.com/jyking/claude2cn/fork) |
-| 问题反馈 | [github.com/jyking/claude2cn/issues](https://github.com/jyking/claude2cn/issues) |
-
----
+- 脚本只向 `claude.ai`、`chatgpt.com` 及声明的只读 GitHub 资源发起请求。
+- 额度接口使用浏览器当前登录态，不读取本机 Claude Code 或 Codex 凭据文件。
+- 不上传 Cookie、访问令牌、对话内容或使用统计。
+- 翻译资源通过固定版本标签和 SHA-256 SRI 校验加载，资源内容变化时浏览器会拒绝执行。
 
 ## 项目结构
 
+```text
+Claude-ChatGPT-Usage/
+├── claude-chatgpt-usage.user.js  # 主用户脚本
+├── claude2cn-translations.user.js # Claude 翻译词典
+├── claude2cn-design.user.js       # Claude Design 翻译词典
+├── en.json                        # 原始英文词条
+├── en2cn.json                     # 英中翻译映射
+├── tests/                         # 用量解析与页面烟雾测试
+└── CHANGELOG.md
 ```
-claude2cn/
-├── claude2cn.user.js   # 核心油猴脚本（翻译引擎 + 用量面板 + 翻译数据）
-├── en2cn.json          # 翻译映射表（英文 → 中文），供维护用
-├── en.json             # 原始英文 key 列表
-├── sort_json.ts        # 翻译文件按字母排序工具
-├── split_json.ts       # 翻译文件拆分辅助工具
-└── update_en.ts        # 从 Claude.ai 更新英文 key 的工具
+
+## 开发与验证
+
+```bash
+npm test
+node --check claude-chatgpt-usage.user.js
 ```
 
----
+## 来源与授权
 
-## 贡献翻译
+本项目基于 [jyking/claude2cn](https://github.com/jyking/claude2cn) 二次开发，保留原作者 `jyking` 的版权声明和完整 MIT 许可文本。
 
-欢迎 PR 补充或修正翻译！
-
-1. Fork 本仓库
-2. 在 `en2cn.json` 中添加或修改翻译键值对
-3. 运行 `bun run sort_json.ts` 保持文件有序
-4. 提交 PR，说明新增/修正的翻译内容
-
----
-
-## 许可证
-
-本项目采用 [MIT 许可证](LICENSE) 开源，欢迎自由使用和二次开发。
+新增的 ChatGPT/Codex、Fable 5 额度兼容和相关测试由 `maojiebc` 维护。详见 [LICENSE](LICENSE) 与 [CHANGELOG.md](CHANGELOG.md)。
