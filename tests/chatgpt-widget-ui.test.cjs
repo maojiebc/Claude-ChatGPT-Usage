@@ -29,7 +29,7 @@ test("ChatGPT weekly quota renders with calendar icon and health colors", () => 
 });
 
 test("quota colors follow remaining-health tiers shared by both providers", () => {
-  // 直接按剩余额度判断：充足绿、关注金黄、偏低橙、告急红。
+  // 直接按剩余额度判断：充足翡翠绿、关注青柠绿、偏低橙、告急红。
   const health = source.match(
     /function quotaHealthColors\(remaining\)[\s\S]*?\n    \}/,
   );
@@ -39,8 +39,8 @@ test("quota colors follow remaining-health tiers shared by both providers", () =
   )();
   assert.equal(colorFor(100)[0], "#059669");
   assert.equal(colorFor(80)[0], "#059669");
-  assert.equal(colorFor(79)[0], "#c37a04");
-  assert.equal(colorFor(60)[0], "#c37a04");
+  assert.equal(colorFor(79)[0], "#4d9e0a");
+  assert.equal(colorFor(60)[0], "#4d9e0a");
   assert.equal(colorFor(59)[0], "#ea580c");
   assert.equal(colorFor(46)[0], "#ea580c");
   assert.equal(colorFor(39)[0], "#ef4444");
