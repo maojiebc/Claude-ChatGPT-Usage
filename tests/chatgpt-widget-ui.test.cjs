@@ -49,8 +49,9 @@ test("ChatGPT compact card also surfaces the reset-credit count", () => {
     /function renderChatGPTCompactCredits\(\)[\s\S]*?\n    \}/,
   );
   assert.ok(fn, "compact credit renderer should exist");
-  // 复用胶囊行结构：label「重置」+ 紫色次数；无卡时整行移除。
-  assert.match(fn[0], /compact-label">重置</);
+  // 复用胶囊行结构：label 用票券小图标（与 7d 缩写同列宽）+ 紫色 ×N；无卡时整行移除。
+  assert.match(fn[0], /claudeIcon\("ticket"\)/);
+  assert.match(fn[0], /`×\$\{credits\.availableCount\}`/);
   assert.match(fn[0], /#8b5cf6/);
   assert.match(fn[0], /row\?\.remove\(\)/);
   assert.match(fn[0], /最近到期/);

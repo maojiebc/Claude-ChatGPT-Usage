@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.5.0
+// @version      1.5.1
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -639,6 +639,8 @@
           /* ChatGPT 面板：水平吸边 + 垂直拖动，浮窗整体可拖拽 */
           :host { touch-action: none; cursor: move; }
           .compact-card { cursor: move; }
+          /* 收起态重置行：票券小图标与 7d 缩写同列同宽，保持两列网格 */
+          .compact-label svg { width: 13px; height: 13px; }
           /* 左侧停靠时卡片从左缘生长，离场卡也贴左对齐 */
           :host([data-dock="left"]) .usage-widget { justify-content: flex-start; }
           :host([data-dock="left"]) .compact-card, :host([data-dock="left"]) .expanded-card { transform-origin: top left; }
@@ -1528,16 +1530,16 @@
         row = document.createElement("span");
         row.className = "compact-row";
         row.setAttribute("data-credit-row", "");
-        row.innerHTML =
-          '<span class="compact-label">重置</span><strong class="compact-percent"></strong>';
+        // label 用票券小图标而非「重置」文字：与 5h/7d 缩写列同宽，
+        // 保持收起卡两列网格的秩序感（2026-07-14 用户反馈）。
+        row.innerHTML = `<span class="compact-label" aria-hidden="true">${claudeIcon("ticket")}</span><strong class="compact-percent"></strong>`;
       }
       row.style.setProperty(
         "--quota-color",
         credits.availableCount > 0 ? "#8b5cf6" : "var(--cu-text-tertiary)",
       );
-      row.querySelector(".compact-percent").textContent = String(
-        credits.availableCount,
-      );
+      row.querySelector(".compact-percent").textContent =
+        `×${credits.availableCount}`;
       row.title = `重置卡 ${credits.availableCount} 次可用 · 最近到期 ${fmtExpiryTime(
         credits.nearestExpiresAt,
       )}`;
