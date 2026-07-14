@@ -6,13 +6,14 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.4.2
+// @version      1.4.3
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
 // @match        https://chatgpt.com/*
 // @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-design.user.js#sha256=19fefdebcb71584886bfa494aed0e54c4922860f01d9db367e838489ab8afb48
 // @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-translations.user.js#sha256=587a5de6adf25d5aa19f1e6f58b5bb6181f31e5d89e49669a3c75a85df8ff61a
+// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.4.3/claude-usage-icons.user.js#sha256=747e2dabba761d379e52323b7975843a6c8a5a852b7d61bac6bdb94065dbbd85
 // @grant        none
 // @license      MIT
 // @run-at       document-start
@@ -787,6 +788,13 @@
       return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ""}</svg>`;
     }
 
+    function generatedClaudeIcon(name, className = "generated-icon") {
+      const source = globalThis.CLAUDE_USAGE_ICON_ASSETS?.[name];
+      return typeof source === "string"
+        ? `<img class="${className}" src="${source}" alt="" aria-hidden="true" decoding="async">`
+        : "";
+    }
+
     const claudeQuotaIcons = {
       fiveHour: "clock",
       sevenDay: "calendar",
@@ -835,6 +843,8 @@
           button { color: inherit; }
           [hidden] { display: none !important; }
           svg { width: 18px; height: 18px; display: block; }
+          img { display: block; }
+          .generated-icon { width: 18px; height: 18px; object-fit: contain; }
           .usage-widget { position: relative; display: flex; justify-content: flex-end; }
           /* 收起/展开互斥卡片：离场卡绝对定位叠在原地做淡出，在场卡撑起浮窗尺寸 */
           .compact-card, .expanded-card {
@@ -916,6 +926,8 @@
             color: #fff;
           }
           .title-badge svg { width: 12px; height: 12px; }
+          .title-badge.generated { background: transparent !important; }
+          .title-badge .generated-title-icon { width: 20px; height: 20px; object-fit: contain; }
           .icon-button {
             width: 32px;
             height: 32px;
@@ -958,6 +970,8 @@
           }
           :host([data-theme="dark"]) .quota-icon { background: var(--quota-soft); background: color-mix(in srgb, var(--quota-color) 22%, transparent); }
           .quota-icon svg { width: 14px; height: 14px; stroke-width: 2; }
+          .quota-icon.generated { background: transparent !important; }
+          .quota-icon .generated-quota-icon { width: 24px; height: 24px; object-fit: contain; }
           .quota-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cu-text); font-size: 13px; font-weight: 550; }
           .quota-remaining { color: var(--cu-text-tertiary); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
           .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; }
@@ -985,6 +999,7 @@
           }
           .reset-time { min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
           .reset-time svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--cu-text-tertiary); }
+          .reset-time .generated-icon { width: 18px; height: 18px; flex: 0 0 auto; }
           .reset-time time { font-variant-numeric: tabular-nums; color: var(--cu-text-secondary); }
           .usage-tooltip {
             position: absolute;
@@ -1064,14 +1079,14 @@
           </button>
           <section class="expanded-card is-off" aria-label="Claude 用量详情">
             <header class="widget-header" data-action="collapse" title="点击空白区域收起">
-              <div class="widget-title"><span class="title-badge">${claudeIcon("boltFilled")}</span><span>Claude 用量</span></div>
-              <button class="icon-button" type="button" data-action="hide" aria-label="关闭用量浮窗">${claudeIcon("close")}</button>
+              <div class="widget-title"><span class="title-badge generated">${generatedClaudeIcon("bolt", "generated-title-icon")}</span><span>Claude 用量</span></div>
+              <button class="icon-button" type="button" data-action="hide" aria-label="关闭用量浮窗">${generatedClaudeIcon("close")}</button>
             </header>
             <div class="quota-list"></div>
             <div class="expanded-status">正在获取额度…</div>
             <footer class="widget-footer">
-              <span class="reset-time">${claudeIcon("refresh")}<span>重置时间：</span><time>--/-- -- --:--</time></span>
-              <button class="icon-button" type="button" data-action="settings" aria-label="用量浮窗设置">${claudeIcon("settings")}</button>
+              <span class="reset-time">${generatedClaudeIcon("refresh")}<span>重置时间：</span><time>--/-- -- --:--</time></span>
+              <button class="icon-button" type="button" data-action="settings" aria-label="用量浮窗设置">${generatedClaudeIcon("settings")}</button>
             </footer>
             <div class="settings-popover is-off">
               <h3 class="settings-title">浮窗设置</h3>
@@ -1324,12 +1339,19 @@
                   ? "Fable 5 · 7 天配额"
                   : row.label;
           const [color, softColor] = quotaHealthColors(remaining);
+          const assetIconName = {
+            fiveHour: "clock",
+            sevenDay: "calendar",
+            fableFive: "brain",
+            model: "brain",
+          }[type];
           const countdown = cdText(row.resets_at);
           return {
             ...row,
             type,
             shortLabel,
             fullLabel,
+            assetIconName,
             remaining,
             critical: remaining <= 10,
             remainingText: countdown ? `${countdown} 剩余` : "剩余时间待定",
@@ -1402,8 +1424,12 @@
           quotaItem = document.createElement("article");
           quotaItem.className = "quota-item";
           quotaItem.dataset.quotaKey = row.key;
+          const usesGeneratedIcon = Boolean(row.assetIconName);
+          const quotaIcon = usesGeneratedIcon
+            ? generatedClaudeIcon(row.assetIconName, "generated-quota-icon")
+            : claudeIcon(row.iconName || claudeQuotaIcons[row.type] || "sparkles");
           quotaItem.innerHTML = `
-            <div class="quota-meta"><span class="quota-icon" aria-hidden="true">${claudeIcon(row.iconName || claudeQuotaIcons[row.type] || "sparkles")}</span><span class="quota-name"></span><span class="quota-remaining"></span></div>
+            <div class="quota-meta"><span class="quota-icon${usesGeneratedIcon ? " generated" : ""}" aria-hidden="true">${quotaIcon}</span><span class="quota-name"></span><span class="quota-remaining"></span></div>
             <div class="quota-value-row"><div class="quota-track" aria-hidden="true"><div class="quota-fill"></div></div><strong class="quota-percent"></strong></div>`;
           quotaList.appendChild(quotaItem);
         }

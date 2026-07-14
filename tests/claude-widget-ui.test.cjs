@@ -7,6 +7,10 @@ const source = fs.readFileSync(
   path.join(__dirname, "..", "claude-chatgpt-usage.user.js"),
   "utf8",
 );
+const iconSource = fs.readFileSync(
+  path.join(__dirname, "..", "claude-usage-icons.user.js"),
+  "utf8",
+);
 
 test("Claude widget follows the compact and expanded reference dimensions", () => {
   // v1.4.0 轻盈化：收起卡 96px（规格上限 104px 内），行高 30px。
@@ -28,7 +32,7 @@ test("Claude widget cards transition between states instead of toggling display"
 });
 
 test("Claude expanded quota items carry type icons and neutral compact chips", () => {
-  // 展开态条目带类型图标（时钟/日历/火花），收起态胶囊回归中性底色。
+  // 展开态条目带类型图标，收起态胶囊回归中性底色。
   assert.match(source, /claudeQuotaIcons\s*=\s*\{[\s\S]*?fiveHour:\s*"clock"[\s\S]*?sevenDay:\s*"calendar"/);
   assert.match(source, /quota-icon/);
   assert.match(
@@ -47,6 +51,30 @@ test("Claude widget has four explicit states and persistent settings", () => {
   assert.match(source, /autoCollapseDelay:\s*4000/);
   assert.match(source, /\[2000, 4000, 8000\]/);
   assert.match(source, /attachShadow\(\{ mode: "open" \}\)/);
+});
+
+test("Claude widget uses the generated icon asset set", () => {
+  for (const name of [
+    "bolt",
+    "clock",
+    "calendar",
+    "brain",
+    "refresh",
+    "settings",
+    "close",
+  ]) {
+    assert.match(iconSource, new RegExp(`${name}: \\"data:image/png;base64,`));
+  }
+  assert.match(source, /CLAUDE_USAGE_ICON_ASSETS/);
+  assert.match(source, /assetIconName = \{/);
+  assert.match(source, /fiveHour:\s*"clock"/);
+  assert.match(source, /sevenDay:\s*"calendar"/);
+  assert.match(source, /fableFive:\s*"brain"/);
+  assert.match(source, /generated-quota-icon/);
+  assert.match(source, /generatedClaudeIcon\("bolt", "generated-title-icon"\)/);
+  assert.match(source, /generatedClaudeIcon\("close"\)/);
+  assert.match(source, /generatedClaudeIcon\("refresh"\)/);
+  assert.match(source, /generatedClaudeIcon\("settings"\)/);
 });
 
 test("closing the Claude widget only hides the current page session", () => {
