@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.2
+// @version      1.0.3
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -689,6 +689,30 @@
         : { modelName: legacyName || "模型", windowLabel: explicitWindow };
     }
 
+    function chatGPTBaseQuotaTitle(window, role) {
+      const minutes = Number(window?.window_minutes);
+      if (role === "secondary") {
+        if (minutes === 10_080) return "Codex 每周额度";
+        if (minutes === 43_200) return "Codex 每月额度";
+        return "Codex 长周期额度";
+      }
+      return Number.isFinite(minutes) && minutes <= 1440
+        ? "Codex 当前额度"
+        : "Codex 标准额度";
+    }
+
+    function chatGPTAdditionalQuotaTitle(modelName) {
+      const raw = String(modelName || "").trim();
+      if (/spark/i.test(raw)) return "Spark 独立额度";
+      const friendlyName = raw
+        .replace(/[_-]+/g, " ")
+        .replace(/\bgpt\b/gi, "GPT")
+        .replace(/\bcodex\b/gi, "Codex")
+        .replace(/\s+/g, " ")
+        .trim();
+      return `${friendlyName || "模型"} 独立额度`;
+    }
+
     function getUsageRows() {
       const rows = [];
       if (usageData.fiveHour) {
@@ -697,19 +721,25 @@
           "5小时窗口",
           "5h",
         );
+        const chatGPTTitle = chatGPTBaseQuotaTitle(
+          usageData.fiveHour,
+          "primary",
+        );
         rows.push({
           key: "primary",
           icon: "⚡",
           ...labels,
-          title: provider === "chatgpt" ? "主额度" : labels.label,
+          title: provider === "chatgpt" ? chatGPTTitle : labels.label,
           meta:
             provider === "chatgpt" ? compactDurationLabel(labels.label) : "",
           label:
             provider === "chatgpt"
-              ? `主额度 · ${compactDurationLabel(labels.label)}`
+              ? `${chatGPTTitle} · ${compactDurationLabel(labels.label)}`
               : labels.label,
           short:
-            provider === "chatgpt" ? `主·${labels.short}` : labels.short,
+            provider === "chatgpt"
+              ? `${chatGPTTitle.replace(/^Codex\s+/u, "").replace(/额度$/u, "")}·${labels.short}`
+              : labels.short,
           ...usageData.fiveHour,
         });
       }
@@ -719,38 +749,54 @@
           "7天配额",
           "7d",
         );
+        const chatGPTTitle = chatGPTBaseQuotaTitle(
+          usageData.sevenDay,
+          "secondary",
+        );
         rows.push({
           key: "secondary",
           icon: "📅",
           ...labels,
-          title: provider === "chatgpt" ? "次额度" : labels.label,
+          title: provider === "chatgpt" ? chatGPTTitle : labels.label,
           meta:
             provider === "chatgpt" ? compactDurationLabel(labels.label) : "",
           label:
             provider === "chatgpt"
-              ? `次额度 · ${compactDurationLabel(labels.label)}`
+              ? `${chatGPTTitle} · ${compactDurationLabel(labels.label)}`
               : labels.label,
           short:
-            provider === "chatgpt" ? `次·${labels.short}` : labels.short,
+            provider === "chatgpt"
+              ? `${chatGPTTitle.replace(/^Codex\s+/u, "").replace(/额度$/u, "")}·${labels.short}`
+              : labels.short,
           ...usageData.sevenDay,
         });
       }
       usageData.modelLimits.forEach((item, index) => {
         const labels = durationLabels(item, "模型配额", "模型");
         const { modelName, windowLabel } = splitLegacyModelName(item);
-        const meta = [windowLabel, compactDurationLabel(labels.label)]
-          .filter(Boolean)
-          .join(" · ");
+        const isChatGPTModel = provider === "chatgpt";
+        const rowTitle = isChatGPTModel
+          ? chatGPTAdditionalQuotaTitle(modelName)
+          : modelName;
+        const meta = isChatGPTModel
+          ? compactDurationLabel(labels.label)
+          : [windowLabel, compactDurationLabel(labels.label)]
+              .filter(Boolean)
+              .join(" · ");
         rows.push({
           key: `model-${index}`,
-          icon: "🧠",
+          icon: isChatGPTModel ? "✦" : "🧠",
           kind: "model",
-          title: modelName,
+          title: rowTitle,
           meta,
-          label: [modelName, meta].filter(Boolean).join(" · "),
-          short: /^Fable 5$/i.test(modelName)
-            ? "Fable"
-            : modelName.slice(0, 8),
+          label: [rowTitle, meta].filter(Boolean).join(" · "),
+          short: isChatGPTModel
+            ? /spark/i.test(modelName)
+              ? "Spark"
+              : rowTitle.replace(/\s*独立额度$/u, "").slice(0, 8)
+            : /^Fable 5$/i.test(modelName)
+              ? "Fable"
+              : modelName.slice(0, 8),
           ...item,
         });
       });

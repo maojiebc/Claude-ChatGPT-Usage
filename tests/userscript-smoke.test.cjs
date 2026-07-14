@@ -148,8 +148,10 @@ test("runs on chatgpt.com and renders Codex quota without Claude globals", async
   panel._listeners.get("mouseenter")();
   assert.equal(panel.style.width, "228px");
   assert.match(panel.innerHTML, /Pro Lite/);
+  assert.match(panel.innerHTML, /Codex 当前额度/);
+  assert.match(panel.innerHTML, /Codex 每周额度/);
   assert.match(panel.innerHTML, /data-usage-heading="model"/);
-  assert.match(panel.innerHTML, /GPT-5\.3-Codex-Spark/);
-  assert.match(panel.innerHTML, /主窗口 · 7天/);
+  assert.match(panel.innerHTML, /Spark 独立额度/);
+  assert.doesNotMatch(panel.innerHTML, /GPT-5\.3-Codex-Spark|主窗口/);
   assert.match(panel.innerHTML, /text-overflow:ellipsis/);
 });

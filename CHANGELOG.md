@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 - 2026-07-14
+
+- 参照 Claude 网页端按额度类别展示的方式，移除 ChatGPT 接口内部模型名和主/次窗口字段。
+- 将通用限额显示为 Codex 当前、标准、每周或长周期额度。
+- 将 GPT-5.3-Codex-Spark 的独立限额显示为更易理解的“Spark 独立额度”。
+
 ## 1.0.2 - 2026-07-14
 
 - 汉化 Claude 首页随时段变化的 Morning、Afternoon、Evening 动态问候语。

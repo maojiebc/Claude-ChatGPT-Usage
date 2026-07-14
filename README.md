@@ -10,7 +10,7 @@
 - **Claude.ai 完整中文汉化**：保留原项目 10,000+ 行翻译词条，覆盖 Claude Code、Artifacts、Projects、Cowork、Claude Design 等界面。
 - **Claude 额度显示**：显示 5 小时窗口、7 日总额度和 Fable 5 独立周额度。
 - **新旧接口兼容**：同时解析新版 `limits[]`、旧版 `seven_day_fable`、`fable_weekly` 等字段。
-- **ChatGPT/Codex 额度显示**：显示当前 ChatGPT 登录账号的 Codex 主窗口、次窗口、套餐类型及额外模型额度。
+- **ChatGPT/Codex 额度显示**：显示当前 ChatGPT 登录账号的 Codex 当前、标准、每周额度，以及 Spark 等独立模型额度。
 - **真实周期识别**：根据接口返回自动显示 5 小时、1 天、7 天或 30 天等周期。
 - **可拖动面板**：支持桌面端和移动端触控拖动，位置分别保存在 Claude.ai 与 ChatGPT 域名下。
 - **明暗主题适配**：自动跟随页面或系统主题。
@@ -36,9 +36,8 @@
 
 ### ChatGPT
 
-- Codex 主额度窗口
-- Codex 次额度窗口
-- 接口返回的额外模型额度
+- Codex 当前、标准或每周额度
+- Spark 等不计入标准限额的独立额度
 - ChatGPT 套餐类型
 
 > ChatGPT 侧显示的是 Codex 订阅额度，不是普通聊天模型的消息次数上限。
