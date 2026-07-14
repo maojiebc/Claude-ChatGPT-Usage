@@ -169,6 +169,8 @@ test("runs on chatgpt.com and renders the weekly usage limit without Claude glob
   assert.ok(panel, "usage panel should be mounted");
   assert.equal(panel.title, "ChatGPT 使用限制");
   assert.match(panel.innerHTML, /36%/);
+  assert.match(panel.innerHTML, />7d</);
+  assert.doesNotMatch(panel.innerHTML, /每周使用限额|重置卡/);
   panel._listeners.get("mouseenter")();
   assert.equal(panel.style.width, "228px");
   assert.match(panel.innerHTML, /Pro Lite/);

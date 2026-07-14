@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.5
+// @version      1.0.6
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -748,10 +748,7 @@
             provider === "chatgpt"
               ? `${chatGPTTitle} · ${compactDurationLabel(labels.label)}`
               : labels.label,
-          short:
-            provider === "chatgpt"
-              ? `${chatGPTTitle.replace(/^Codex\s+/u, "").replace(/额度$/u, "")}·${labels.short}`
-              : labels.short,
+          short: labels.short,
           ...usageData.fiveHour,
         });
       }
@@ -773,10 +770,7 @@
             provider === "chatgpt"
               ? `${chatGPTTitle} · ${compactDurationLabel(labels.label)}`
               : labels.label,
-          short:
-            provider === "chatgpt"
-              ? `${chatGPTTitle.replace(/^Codex\s+/u, "").replace(/额度$/u, "")}·${labels.short}`
-              : labels.short,
+          short: labels.short,
           ...usageData.sevenDay,
         });
       }
@@ -1026,20 +1020,9 @@
           ${divider}`;
           })
           .join("");
-        const resetCredits = usageData.resetCredits;
-        const resetCreditsCollapsed =
-          provider === "chatgpt" && resetCredits
-            ? `<div style="width:${isMobile ? 14 : 30}px;height:1px;background:${textMuted};opacity:0.3;"></div>
-              <div data-reset-credit-summary style="text-align:center;">
-                <div style="font-size:${isMobile ? 7 : 8}px;color:${textMuted};margin-bottom:2px;white-space:nowrap;">重置卡</div>
-                <div style="font-size:${isMobile ? 10 : 13}px;font-weight:600;line-height:1.05;">${resetCredits.availableCount}</div>
-              </div>`
-            : "";
-
         panel.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:${isMobile ? 2 : 8}px;align-items:center;">
           ${collapsedRows}
-          ${resetCreditsCollapsed}
         </div>
       `;
       }
