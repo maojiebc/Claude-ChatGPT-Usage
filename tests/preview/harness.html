@@ -174,9 +174,16 @@
     return realFetch(input, init);
   };
 
-  // ---------- 3. stub @require 词库 ----------
+  // ---------- 3. stub @require 词库 + 加载本地图标资产 ----------
   window.TRANSLATIONS = {};
   window.DESIGN_TRANSLATIONS = {};
+  // v1.4.3 起 Claude 面板图标来自 @require 的资源脚本，本地直接引仓库文件。
+  try {
+    const iconRes = await realFetch("../../claude-usage-icons.user.js");
+    (0, eval)(await iconRes.text());
+  } catch (e) {
+    console.warn("[harness] 图标资产加载失败，Claude 面板图标将为空", e);
+  }
 
   // ---------- 4. 加载 userscript，绕过站点检查 ----------
   const res = await realFetch("../../claude-chatgpt-usage.user.js");
