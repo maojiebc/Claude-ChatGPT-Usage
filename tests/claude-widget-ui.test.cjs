@@ -26,6 +26,32 @@ test("Claude widget has four explicit states and persistent settings", () => {
   assert.match(source, /attachShadow\(\{ mode: "open" \}\)/);
 });
 
+test("closing the Claude widget only hides the current page session", () => {
+  assert.match(
+    source,
+    /\["collapsed", "expanded"\]\.includes\(\s*saved\.lastVisibleState/,
+  );
+  assert.match(
+    source,
+    /\["collapsed", "expanded"\]\.includes\(next\)[\s\S]*?lastVisibleState = next/,
+  );
+  assert.doesNotMatch(
+    source,
+    /\["collapsed", "expanded", "hidden"\]\.includes\(\s*saved\.lastVisibleState/,
+  );
+});
+
+test("hovering the Claude compact card expands it immediately", () => {
+  assert.match(
+    source,
+    /compact\.addEventListener\("mouseenter",[\s\S]*?setClaudeWidgetState\("expanded"\)/,
+  );
+  assert.match(
+    source,
+    /host\.addEventListener\("mouseleave", scheduleClaudeAutoCollapse\)/,
+  );
+});
+
 test("Claude compact view is limited to 5h, 7d, and F5", () => {
   assert.match(source, /\? "5h"/);
   assert.match(source, /\? "7d"/);

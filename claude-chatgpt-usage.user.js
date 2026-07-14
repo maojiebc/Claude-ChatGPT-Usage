@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.1.1
+// @version      1.1.2
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -632,7 +632,7 @@
         )
           ? saved.verticalPosition
           : defaultClaudeSettings.verticalPosition;
-        const lastVisibleState = ["collapsed", "expanded", "hidden"].includes(
+        const lastVisibleState = ["collapsed", "expanded"].includes(
           saved.lastVisibleState,
         )
           ? saved.lastVisibleState
@@ -943,9 +943,9 @@
       expanded.hidden = !["expanded", "settings"].includes(next);
       settings.hidden = next !== "settings";
 
-      if (next !== "settings") {
+      if (["collapsed", "expanded"].includes(next)) {
         claudeSettings.lastVisibleState = next;
-      } else {
+      } else if (next === "settings") {
         claudeSettings.lastVisibleState = "expanded";
       }
       if (persist) saveClaudeSettings();
@@ -992,6 +992,9 @@
     function bindClaudePanelEvents(host) {
       const compact = claudeShadow.querySelector('[data-action="expand"]');
       const header = claudeShadow.querySelector(".widget-header");
+      compact.addEventListener("mouseenter", () =>
+        setClaudeWidgetState("expanded"),
+      );
       compact.addEventListener("click", () =>
         setClaudeWidgetState("expanded"),
       );
