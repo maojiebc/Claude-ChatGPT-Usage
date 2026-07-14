@@ -69,6 +69,29 @@ test("ChatGPT hover, tap and drag route through one state entry", () => {
   assert.doesNotMatch(source, /isHovered = !isHovered/);
 });
 
+test("ChatGPT panel docks to the nearest edge instead of floating freely", () => {
+  // 水平永远吸边（与 Claude 的贴边一致），只记忆垂直位置与停靠边。
+  assert.match(source, /function applyChatGPTPosition\(/);
+  assert.match(source, /savedPosition = \{ top: 50, isRight: true \}/);
+  assert.match(
+    source,
+    /rect\.left \+ rect\.width \/ 2 > window\.innerWidth \/ 2/,
+  );
+  // localStorage 只存 {top, isRight}；旧版的悬空 left/right 偏移不再写入。
+  assert.match(
+    source,
+    /JSON\.stringify\(\{\n\s*top: savedPosition\.top,\n\s*isRight: savedPosition\.isRight,\n\s*\}\)/,
+  );
+  assert.doesNotMatch(source, /savedPosition\.right = window\.innerWidth/);
+  // 拖动被打断（pointercancel）时回弹到停靠位，不悬空。
+  const cancelBlock = source.match(
+    /pointercancel[\s\S]*?renderPanel\(\);\n\s*\}\);/,
+  )[0];
+  assert.match(cancelBlock, /applyChatGPTPosition\(\)/);
+  // 左停靠时卡片从左缘生长。
+  assert.match(source, /data-dock="left"[\s\S]*?transform-origin: top left/);
+});
+
 test("both providers resolve theme through the same data-theme attribute", () => {
   const themeSource = source.match(
     /function applyTheme\(\)[\s\S]*?\n    \}/,

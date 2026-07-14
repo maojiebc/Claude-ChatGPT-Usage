@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.4.0
+// @version      1.4.1
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -534,7 +534,9 @@
     let claudeDocumentClickHandler = null;
     let claudeKeyHandler = null;
     let isDragging = false;
-    let savedPosition = { left: null, right: 4, top: 50, isRight: true }; // 默认右上角
+    // ChatGPT 浮窗定位：水平永远吸附左/右边缘（与 Claude 的贴边一致），
+    // 拖动只保留垂直位置与停靠边，不再记忆任意悬空坐标。
+    let savedPosition = { top: 50, isRight: true };
 
     const claudeSettingsStorageKey = "claude-usage-monitor:settings:v1";
     const defaultClaudeSettings = Object.freeze({
@@ -636,9 +638,13 @@
       chatgptShadow.innerHTML = `
         <style>
           ${widgetSharedStyles()}
-          /* ChatGPT 面板：位置由拖动逻辑内联管理，浮窗整体可拖拽 */
+          /* ChatGPT 面板：水平吸边 + 垂直拖动，浮窗整体可拖拽 */
           :host { touch-action: none; cursor: move; }
           .compact-card { cursor: move; }
+          /* 左侧停靠时卡片从左缘生长，离场卡也贴左对齐 */
+          :host([data-dock="left"]) .usage-widget { justify-content: flex-start; }
+          :host([data-dock="left"]) .compact-card, :host([data-dock="left"]) .expanded-card { transform-origin: top left; }
+          :host([data-dock="left"]) .compact-card.is-off, :host([data-dock="left"]) .expanded-card.is-off { right: auto; left: 0; }
           .title-badge { background: linear-gradient(135deg, #1fc39a, #0d8a6a); }
           .plan-badge { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
           .credit-list { flex: 0 0 auto; border-top: 1px solid var(--cu-divider); }
@@ -673,11 +679,34 @@
           </section>
         </div>`;
       panel = host;
-      host.style.top = "50px";
-      host.style.right = getPanelMetrics().defaultRight + "px";
       const compact = chatgptShadow.querySelector('[data-action="expand"]');
       compact.addEventListener("click", () => setChatGPTWidgetState(true));
+      applyChatGPTPosition();
       return host;
+    }
+
+    // 水平永远贴边（左或右 8px），只有垂直位置与停靠边可调，与 Claude 的贴边一致。
+    function applyChatGPTPosition(host = panel) {
+      if (!host) return;
+      const margin = getPanelMetrics().defaultRight;
+      const maxTop = Math.max(
+        margin,
+        window.innerHeight - (host.offsetHeight || 120) - margin,
+      );
+      const top = Math.min(
+        Math.max(margin, Number(savedPosition.top) || 50),
+        maxTop,
+      );
+      host.style.top = top + "px";
+      host.style.bottom = "auto";
+      host.setAttribute("data-dock", savedPosition.isRight ? "right" : "left");
+      if (savedPosition.isRight) {
+        host.style.right = margin + "px";
+        host.style.left = "auto";
+      } else {
+        host.style.left = margin + "px";
+        host.style.right = "auto";
+      }
     }
 
     function setChatGPTWidgetState(expanded) {
@@ -692,19 +721,6 @@
       chatgptShadow
         .querySelector(".expanded-card")
         .classList.toggle("is-off", !isHovered);
-      // 靠左停靠时展开卡向右生长，夹紧防止越出屏幕右缘；拖动中由拖动逻辑管定位。
-      if (
-        !isDragging &&
-        savedPosition.isRight === false &&
-        savedPosition.left !== null
-      ) {
-        const width = isHovered
-          ? getPanelMetrics().expandedWidth
-          : getPanelMetrics().collapsedWidth;
-        const maxLeft = Math.max(0, window.innerWidth - width - 8);
-        panel.style.left = Math.min(savedPosition.left, maxLeft) + "px";
-        panel.style.right = "auto";
-      }
     }
 
     function loadClaudeSettings() {
@@ -1704,23 +1720,12 @@
       return rows;
     }
 
-    function isMobileLayout() {
-      return window.innerWidth <= 768;
-    }
-
     function getPanelMetrics() {
-      // 与共享设计语言一致：收起卡 104px、展开卡 304px（CSS 内已按视口收窄）。
+      // 与共享设计语言一致：收起卡 96px、展开卡 304px（CSS 内已按视口收窄）。
       return {
         defaultRight: 8,
-        collapsedWidth: 104,
+        collapsedWidth: 96,
         expandedWidth: Math.min(304, window.innerWidth - 24),
-      };
-    }
-
-    function getMobileAnchorPosition() {
-      return {
-        left: Math.round(window.innerWidth * 0.64),
-        top: 4,
       };
     }
 
@@ -1980,40 +1985,25 @@
           panel.style.cursor = "move";
           panel.releasePointerCapture?.(e.pointerId);
 
-          // 保存实际位置坐标和对齐方式
-          const rect = panel.getBoundingClientRect();
-          const isRight = rect.left > window.innerWidth / 2;
-
-          if (isRight) {
-            // 在右边时保存距右边的距离
-            savedPosition.right = window.innerWidth - rect.right;
-            savedPosition.left = null;
-          } else {
-            // 在左边时保存距左边的距离
-            savedPosition.left = rect.left;
-            savedPosition.right = null;
-          }
-
-          savedPosition.top = rect.top;
-          savedPosition.isRight = isRight;
-
-          // 保存到 localStorage
-          localStorage.setItem(
-            positionStorageKey,
-            JSON.stringify({
-              left: savedPosition.left,
-              right: savedPosition.right,
-              top: rect.top,
-              isRight: isRight,
-            }),
-          );
-
-          if (!pointerMoved && e.pointerType !== "mouse") {
+          if (pointerMoved) {
+            // 垂直位置自由，水平吸附到卡片中心更近的一侧（transition 提供吸边动画）。
+            const rect = panel.getBoundingClientRect();
+            savedPosition.top = rect.top;
+            savedPosition.isRight =
+              rect.left + rect.width / 2 > window.innerWidth / 2;
+            localStorage.setItem(
+              positionStorageKey,
+              JSON.stringify({
+                top: savedPosition.top,
+                isRight: savedPosition.isRight,
+              }),
+            );
+            applyChatGPTPosition();
+          } else if (e.pointerType !== "mouse") {
             // 触屏 tap 切换展开/收起
             setChatGPTWidgetState(!isHovered);
           }
 
-          // 重新渲染以调整展开方向
           renderPanel();
         }
       });
@@ -2024,6 +2014,8 @@
         panel.style.transition = "all 0.2s ease";
         panel.style.cursor = "move";
         panel.releasePointerCapture?.(e.pointerId);
+        // 拖动被系统打断：回弹到上次保存的停靠位，避免浮窗悬在半空。
+        applyChatGPTPosition();
         renderPanel();
       });
     }
@@ -2054,62 +2046,16 @@
 
         document.body.appendChild(panel);
 
-        if (provider === "chatgpt" && isMobileLayout() && !options.position) {
-          const mobilePos = getMobileAnchorPosition();
-          savedPosition.left = mobilePos.left;
-          savedPosition.right = null;
-          savedPosition.top = mobilePos.top;
-          savedPosition.isRight = false;
-          panel.style.left = mobilePos.left + "px";
-          panel.style.top = mobilePos.top + "px";
-          panel.style.right = "auto";
-          panel.style.bottom = "auto";
-        }
-
-        // 恢复保存的位置（在添加到DOM后）
+        // 恢复保存的停靠位置：只取垂直位置与停靠边，水平永远吸边。
+        // 旧版本存过的任意悬空坐标（left/right 偏移）在这里自动归位贴边。
         const savedPos = localStorage.getItem(positionStorageKey);
         if (provider === "chatgpt" && savedPos && !options.position) {
           try {
             const pos = JSON.parse(savedPos);
-            let top = parseFloat(pos.top);
-            let isRight = pos.isRight !== undefined ? pos.isRight : false;
-
-            // 边界检查和修正
-            const maxTop = window.innerHeight - 100;
-            if (top > maxTop) top = maxTop;
-            if (top < 0) top = 0;
-
-            savedPosition.top = top;
-            savedPosition.isRight = isRight;
-
-            if (isRight && pos.right !== null && pos.right !== undefined) {
-              // 恢复右对齐位置
-              let right = parseFloat(pos.right);
-              const maxRight = window.innerWidth - getPanelMetrics().collapsedWidth;
-              if (right > maxRight) right = maxRight;
-              if (right < 0) right = 0;
-
-              savedPosition.right = right;
-              savedPosition.left = null;
-
-              panel.style.right = right + "px";
-              panel.style.left = "auto";
-            } else if (pos.left !== null && pos.left !== undefined) {
-              // 恢复左对齐位置
-              let left = parseFloat(pos.left);
-              const maxLeft = window.innerWidth - getPanelMetrics().collapsedWidth;
-              if (left > maxLeft) left = maxLeft;
-              if (left < 0) left = 0;
-
-              savedPosition.left = left;
-              savedPosition.right = null;
-
-              panel.style.left = left + "px";
-              panel.style.right = "auto";
-            }
-
-            panel.style.top = top + "px";
-            panel.style.bottom = "auto";
+            const top = parseFloat(pos.top);
+            if (Number.isFinite(top)) savedPosition.top = top;
+            savedPosition.isRight = pos.isRight !== false;
+            applyChatGPTPosition();
           } catch (e) {
             console.warn(`[${panelTitle}] 恢复位置失败`, e);
           }
