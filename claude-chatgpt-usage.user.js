@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.4
+// @version      1.0.5
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -136,6 +136,7 @@
         fiveHour: null,
         sevenDay: null,
         modelLimits: [],
+        resetCredits: null,
         planName: "",
         hit: false,
         hasScopedSurface: false,
@@ -206,6 +207,7 @@
         fiveHour,
         sevenDay,
         modelLimits: [...modelLimits.values()],
+        resetCredits: null,
         planName: stringValue(
           data.subscription_type ?? data.plan_name ?? data.plan,
         ),
@@ -225,6 +227,7 @@
         fiveHour: null,
         sevenDay: null,
         modelLimits: [],
+        resetCredits: null,
         planName: "",
         hit: false,
       };
@@ -250,6 +253,7 @@
         fiveHour: null,
         sevenDay: weeklyWindow ?? null,
         modelLimits: [],
+        resetCredits: parseChatGPTResetCredits(data),
         planName: stringValue(data.plan_type ?? data.planType ?? data.plan),
       };
       return {
@@ -257,6 +261,41 @@
         hit: Boolean(
           result.fiveHour || result.sevenDay || result.modelLimits.length,
         ),
+      };
+    }
+
+    function parseChatGPTResetCredits(data) {
+      if (!data || typeof data !== "object") return null;
+      const summary =
+        data.rate_limit_reset_credits ?? data.rateLimitResetCredits ?? data;
+      if (!summary || typeof summary !== "object") return null;
+
+      const credits = Array.isArray(summary.credits) ? summary.credits : null;
+      const availableCredits = (credits ?? []).filter((credit) => {
+        if (!credit || typeof credit !== "object") return false;
+        const status = stringValue(credit.status).toLowerCase();
+        return !status || status === "available";
+      });
+      const availableCountValue = firstNumber(
+        summary.available_count,
+        summary.availableCount,
+      );
+      if (availableCountValue === null && credits === null) return null;
+
+      const expirations = availableCredits
+        .map((credit) =>
+          toTimestampMs(credit.expires_at ?? credit.expiresAt ?? null),
+        )
+        .filter((timestamp) => timestamp !== null)
+        .sort((a, b) => a - b);
+
+      return {
+        availableCount: Math.max(
+          0,
+          Math.floor(availableCountValue ?? availableCredits.length),
+        ),
+        nearestExpiresAt: expirations[0] ?? null,
+        detailsAvailable: credits !== null,
       };
     }
 
@@ -270,6 +309,7 @@
         fiveHour: incoming.fiveHour ?? base.fiveHour,
         sevenDay: incoming.sevenDay ?? base.sevenDay,
         modelLimits: [...modelLimits.values()],
+        resetCredits: incoming.resetCredits ?? base.resetCredits ?? null,
         planName: incoming.planName || base.planName,
         hasScopedSurface: Boolean(
           base.hasScopedSurface || incoming.hasScopedSurface,
@@ -283,7 +323,13 @@
       };
     }
 
-    return Object.freeze({ parseClaude, parseChatGPT, merge, toTimestampMs });
+    return Object.freeze({
+      parseClaude,
+      parseChatGPT,
+      parseChatGPTResetCredits,
+      merge,
+      toTimestampMs,
+    });
   })();
   // END USAGE_PARSERS
 
@@ -449,6 +495,7 @@
       fiveHour: null,
       sevenDay: null,
       modelLimits: [],
+      resetCredits: null,
       planName: "",
       lastFetch: null,
       fetchError: null,
@@ -602,6 +649,16 @@
         minute: "2-digit",
         hour12: false,
       });
+    }
+
+    function fmtExpiryTime(ts) {
+      const timestamp = UsageParsers.toTimestampMs(ts);
+      if (timestamp === null) return "暂无到期时间";
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return "暂无到期时间";
+      const pad = (value) => String(value).padStart(2, "0");
+      const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+      return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${weekdays[date.getDay()]} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
     function escapeHtml(value) {
@@ -908,11 +965,26 @@
           </div>`;
           })
           .join("");
+        const resetCredits = usageData.resetCredits;
+        const resetCreditsExpanded =
+          provider === "chatgpt" && resetCredits
+            ? `<div data-reset-credit-summary style="border-top:1px solid ${dividerColor};margin-top:8px;padding-top:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <span style="font-size:9px;font-weight:600;opacity:0.72;">重置卡</span>
+                  <span style="font-size:8px;color:${textMuted};background:${badgeBackground};border:1px solid ${dividerColor};border-radius:999px;padding:1px 6px;white-space:nowrap;">${resetCredits.availableCount} 次可用</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:8px;color:${textMuted};">
+                  <span>最近到期</span>
+                  <span style="text-align:right;white-space:nowrap;">${escapeHtml(fmtExpiryTime(resetCredits.nearestExpiresAt))}</span>
+                </div>
+              </div>`
+            : "";
 
         panel.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:0;">
           <div style="font-size:11px;font-weight:600;opacity:0.8;text-align:center;border-bottom:1px solid ${textMuted};padding-bottom:6px;margin-bottom:10px;">${escapeHtml(panelTitle)}${plan}</div>
           ${expandedRows}
+          ${resetCreditsExpanded}
         </div>
       `;
       } else {
@@ -954,10 +1026,20 @@
           ${divider}`;
           })
           .join("");
+        const resetCredits = usageData.resetCredits;
+        const resetCreditsCollapsed =
+          provider === "chatgpt" && resetCredits
+            ? `<div style="width:${isMobile ? 14 : 30}px;height:1px;background:${textMuted};opacity:0.3;"></div>
+              <div data-reset-credit-summary style="text-align:center;">
+                <div style="font-size:${isMobile ? 7 : 8}px;color:${textMuted};margin-bottom:2px;white-space:nowrap;">重置卡</div>
+                <div style="font-size:${isMobile ? 10 : 13}px;font-weight:600;line-height:1.05;">${resetCredits.availableCount}</div>
+              </div>`
+            : "";
 
         panel.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:${isMobile ? 2 : 8}px;align-items:center;">
           ${collapsedRows}
+          ${resetCreditsCollapsed}
         </div>
       `;
       }
@@ -990,6 +1072,7 @@
         usageData.fiveHour = snapshot.fiveHour;
         usageData.sevenDay = snapshot.sevenDay;
         usageData.modelLimits = snapshot.modelLimits;
+        usageData.resetCredits = snapshot.resetCredits ?? null;
         usageData.planName = snapshot.planName;
         usageData.lastFetch = Date.now();
         usageData.fetchError = null;
@@ -1106,8 +1189,15 @@
             throw new Error(`HTTP ${response.status}，当前账号可能没有 Codex 权限`);
           }
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const parsed = UsageParsers.parseChatGPT(await response.json());
-          if (parsed.hit) return parsed;
+          const data = await response.json();
+          const parsed = UsageParsers.parseChatGPT(data);
+          if (parsed.hit) {
+            parsed.resetCredits = await fetchChatGPTResetCredits(
+              headers,
+              parsed.resetCredits,
+            );
+            return parsed;
+          }
           lastError = new Error("接口响应中没有额度窗口");
         } catch (error) {
           lastError = error;
@@ -1115,6 +1205,30 @@
         }
       }
       throw lastError ?? new Error("所有用量接口均不可用");
+    }
+
+    async function fetchChatGPTResetCredits(headers, fallbackSummary) {
+      const endpoints = [
+        "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+        "https://chatgpt.com/api/codex/rate-limit-reset-credits",
+      ];
+      for (const url of endpoints) {
+        try {
+          const response = await _origFetch(url, {
+            credentials: "include",
+            headers,
+          });
+          if (response.status === 404) continue;
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const parsed = UsageParsers.parseChatGPTResetCredits(
+            await response.json(),
+          );
+          if (parsed) return parsed;
+        } catch (error) {
+          console.warn("[ChatGPT重置卡] 接口失败:", url, error.message);
+        }
+      }
+      return fallbackSummary ?? null;
     }
 
     function enableDrag() {

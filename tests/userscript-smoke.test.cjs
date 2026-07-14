@@ -96,6 +96,31 @@ test("runs on chatgpt.com and renders the weekly usage limit without Claude glob
               },
             },
           ],
+          rate_limit_reset_credits: { available_count: 4 },
+        }),
+        ok: true,
+        status: 200,
+      };
+    }
+    if (
+      url ===
+      "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
+    ) {
+      return {
+        json: async () => ({
+          available_count: 4,
+          credits: [
+            {
+              id: "reset-later",
+              status: "available",
+              expires_at: "2026-08-12T00:00:00Z",
+            },
+            {
+              id: "reset-nearest",
+              status: "available",
+              expires_at: "2026-08-01T00:00:00Z",
+            },
+          ],
         }),
         ok: true,
         status: 200,
@@ -148,6 +173,9 @@ test("runs on chatgpt.com and renders the weekly usage limit without Claude glob
   assert.equal(panel.style.width, "228px");
   assert.match(panel.innerHTML, /Pro Lite/);
   assert.match(panel.innerHTML, /每周使用限额/);
+  assert.match(panel.innerHTML, /重置卡/);
+  assert.match(panel.innerHTML, /4 次可用/);
+  assert.match(panel.innerHTML, /最近到期/);
   assert.doesNotMatch(panel.innerHTML, /Codex 当前额度|77%/);
   assert.doesNotMatch(panel.innerHTML, /data-usage-heading="model"/);
   assert.doesNotMatch(

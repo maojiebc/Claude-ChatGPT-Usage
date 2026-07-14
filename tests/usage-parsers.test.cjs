@@ -131,6 +131,43 @@ test("finds a weekly ChatGPT limit in the primary window", () => {
   assert.equal(parsed.modelLimits.length, 0);
 });
 
+test("parses reset-card count and nearest available expiry", () => {
+  const parsed = parsers.parseChatGPTResetCredits({
+    available_count: 4,
+    credits: [
+      {
+        id: "reset-later",
+        status: "available",
+        expires_at: "2026-08-12T00:00:00Z",
+      },
+      {
+        id: "reset-redeemed",
+        status: "redeemed",
+        expires_at: "2026-07-16T00:00:00Z",
+      },
+      {
+        id: "reset-sooner",
+        status: "available",
+        expires_at: "2026-08-01T00:00:00Z",
+      },
+    ],
+  });
+
+  assert.equal(parsed.availableCount, 4);
+  assert.equal(parsed.nearestExpiresAt, Date.parse("2026-08-01T00:00:00Z"));
+  assert.equal(parsed.detailsAvailable, true);
+});
+
+test("parses reset-card count when usage response has no details", () => {
+  const parsed = parsers.parseChatGPTResetCredits({
+    rate_limit_reset_credits: { available_count: 3 },
+  });
+
+  assert.equal(parsed.availableCount, 3);
+  assert.equal(parsed.nearestExpiresAt, null);
+  assert.equal(parsed.detailsAvailable, false);
+});
+
 test("normalizes epoch seconds, milliseconds and ISO reset times", () => {
   assert.equal(parsers.toTimestampMs(1_784_000_000), 1_784_000_000_000);
   assert.equal(parsers.toTimestampMs("1784000000000"), 1_784_000_000_000);
