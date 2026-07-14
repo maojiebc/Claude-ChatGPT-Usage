@@ -44,9 +44,12 @@ test("translates model picker taglines and effort menu entries", () => {
     ),
     "工作量越高，回答越详尽，但耗时更长、额度消耗也更快。",
   );
-  assert.equal(translations.translate("Low"), "低");
-  assert.equal(translations.translate("High"), "高");
-  assert.equal(translations.translate("Max"), "最高");
+  // 工作量档位保留英文（用户反馈：强度词中文直译生硬），Default 徽标仍译。
+  assert.equal(translations.translate("Low"), "Low");
+  assert.equal(translations.translate("Medium"), "Medium");
+  assert.equal(translations.translate("High"), "High");
+  assert.equal(translations.translate("Extra"), "Extra");
+  assert.equal(translations.translate("Max"), "Max");
   assert.equal(translations.translate("Default"), "默认");
 });
 

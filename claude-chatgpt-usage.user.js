@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.4.1
+// @version      1.4.2
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -447,11 +447,8 @@
         "工作量越高，回答越详尽，但耗时更长、额度消耗也更快。",
       "More models": "更多模型",
       Effort: "工作量",
-      Low: "低",
-      Medium: "中",
-      High: "高",
-      Extra: "超高",
-      Max: "最高",
+      // 工作量档位（Low/Medium/High/Extra/Max）保留英文：产品语境下的
+      // 强度词，中文直译反而生硬（2026-07-14 用户反馈）。
       Default: "默认",
     };
 
