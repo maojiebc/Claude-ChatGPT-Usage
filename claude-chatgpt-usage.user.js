@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.4.3
+// @version      1.5.0
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -1515,6 +1515,36 @@
       });
     }
 
+    // 收起态的重置卡行：额度行之下追加「重置 N」，次数与展开态票券同紫。
+    function renderChatGPTCompactCredits() {
+      const compactList = chatgptShadow.querySelector(".compact-list");
+      const credits = usageData.resetCredits;
+      let row = compactList.querySelector("[data-credit-row]");
+      if (!credits) {
+        row?.remove();
+        return;
+      }
+      if (!row) {
+        row = document.createElement("span");
+        row.className = "compact-row";
+        row.setAttribute("data-credit-row", "");
+        row.innerHTML =
+          '<span class="compact-label">重置</span><strong class="compact-percent"></strong>';
+      }
+      row.style.setProperty(
+        "--quota-color",
+        credits.availableCount > 0 ? "#8b5cf6" : "var(--cu-text-tertiary)",
+      );
+      row.querySelector(".compact-percent").textContent = String(
+        credits.availableCount,
+      );
+      row.title = `重置卡 ${credits.availableCount} 次可用 · 最近到期 ${fmtExpiryTime(
+        credits.nearestExpiresAt,
+      )}`;
+      // 额度行每次刷新会重新 append，这里同样移到末尾保持行序稳定。
+      compactList.appendChild(row);
+    }
+
     function renderChatGPTCredits() {
       const creditList = chatgptShadow.querySelector(".credit-list");
       const credits = usageData.resetCredits;
@@ -1555,6 +1585,7 @@
 
       if (rows.length) {
         updateQuotaNodes(chatgptShadow, rows);
+        renderChatGPTCompactCredits();
         compactList.hidden = false;
         compactStatus.hidden = true;
         quotaList.hidden = false;

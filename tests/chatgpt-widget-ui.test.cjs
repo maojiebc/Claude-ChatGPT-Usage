@@ -44,6 +44,20 @@ test("quota colors follow remaining-health tiers shared by both providers", () =
   assert.doesNotMatch(source, /baseColors/);
 });
 
+test("ChatGPT compact card also surfaces the reset-credit count", () => {
+  const fn = source.match(
+    /function renderChatGPTCompactCredits\(\)[\s\S]*?\n    \}/,
+  );
+  assert.ok(fn, "compact credit renderer should exist");
+  // 复用胶囊行结构：label「重置」+ 紫色次数；无卡时整行移除。
+  assert.match(fn[0], /compact-label">重置</);
+  assert.match(fn[0], /#8b5cf6/);
+  assert.match(fn[0], /row\?\.remove\(\)/);
+  assert.match(fn[0], /最近到期/);
+  // 收起态渲染链路中实际调用。
+  assert.match(source, /updateQuotaNodes\(chatgptShadow, rows\);\n\s*renderChatGPTCompactCredits\(\)/);
+});
+
 test("ChatGPT reset credits render as a dedicated block outside quota rows", () => {
   assert.match(source, /function renderChatGPTCredits\(\)/);
   assert.match(source, /credit-item/);
