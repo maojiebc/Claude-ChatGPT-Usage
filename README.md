@@ -23,7 +23,7 @@
 2. 点击安装：[claude-chatgpt-usage.user.js](https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/main/claude-chatgpt-usage.user.js)。
 3. 刷新 [Claude.ai](https://claude.ai/) 或 [ChatGPT](https://chatgpt.com/)。
 
-Greasy Fork 安装地址将在首次发布后补充。
+目前仅通过 GitHub 发布和更新，不在 Greasy Fork 上架。
 
 ## 显示内容
 
