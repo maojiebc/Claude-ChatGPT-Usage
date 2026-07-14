@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude 用量浮窗预览 Harness</title>
+<style>
+  /* 仿 claude.ai 页面底色，让浮窗在真实感环境中评估 */
+  :root { --page-bg: #faf9f5; --page-text: #3d3929; --card-bg: #ffffff; --card-border: #e8e6dc; }
+  html.dark { --page-bg: #262624; --page-text: #eeece2; --card-bg: #30302e; --card-border: #3f3e3a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--page-bg); color: var(--page-text);
+    font-family: ui-sans-serif, -apple-system, "PingFang SC", sans-serif;
+    transition: background 200ms ease;
+  }
+  .toolbar {
+    position: fixed; left: 16px; top: 16px; z-index: 99;
+    display: flex; gap: 8px; flex-wrap: wrap; max-width: 420px;
+  }
+  .toolbar button {
+    padding: 6px 12px; border: 1px solid var(--card-border); border-radius: 8px;
+    background: var(--card-bg); color: var(--page-text); font-size: 12px; cursor: pointer;
+  }
+  .toolbar button.active { outline: 2px solid #4285f4; }
+  main { max-width: 680px; margin: 0 auto; padding: 96px 24px 48px; }
+  .fake-chat {
+    border: 1px solid var(--card-border); border-radius: 16px; background: var(--card-bg);
+    padding: 24px; line-height: 1.7; font-size: 14px;
+  }
+  .fake-chat h1 { font-size: 20px; margin: 0 0 12px; }
+  .fake-input {
+    margin-top: 24px; border: 1px solid var(--card-border); border-radius: 14px;
+    background: var(--card-bg); padding: 16px; color: #999; font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button id="btn-theme">🌓 明/暗</button>
+  <button data-scene="normal">正常额度</button>
+  <button data-scene="danger">低额度告警</button>
+  <button data-scene="error">接口失败</button>
+  <button id="btn-clear">清设置并刷新</button>
+</div>
+<main>
+  <div class="fake-chat">
+    <h1>仿 Claude 对话区</h1>
+    <p>这是一个本地预览 harness：右侧浮窗即油猴脚本真实渲染结果（Shadow DOM、状态机、设置持久化全部走线上同一套代码），仅额度接口被 mock 替换。</p>
+    <p>用左上角按钮切换明暗主题与数据场景；数据场景切换会刷新页面。悬停收起卡展开，Esc 收起，齿轮进设置。</p>
+  </div>
+  <div class="fake-input">给 Claude 发送消息…</div>
+</main>
+
+<script>
+(async function bootstrapHarness() {
+  // ---------- 1. mock 数据场景 ----------
+  const SCENE_KEY = "harness-scene";
+  const scene = localStorage.getItem(SCENE_KEY) || "normal";
+  document.querySelectorAll("[data-scene]").forEach((btn) => {
+    if (btn.dataset.scene === scene) btn.classList.add("active");
+    btn.addEventListener("click", () => {
+      localStorage.setItem(SCENE_KEY, btn.dataset.scene);
+      location.reload();
+    });
+  });
+  document.getElementById("btn-theme").addEventListener("click", () => {
+    document.documentElement.classList.toggle("dark");
+  });
+  document.getElementById("btn-clear").addEventListener("click", () => {
+    localStorage.removeItem("claude-usage-monitor:settings:v1");
+    localStorage.removeItem(SCENE_KEY);
+    location.reload();
+  });
+
+  const now = Date.now();
+  const in30m = new Date(now + 30 * 60 * 1000).toISOString();
+  // 下一个周五 00:00（本地时区）
+  const nextFriday = (() => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    do { d.setDate(d.getDate() + 1); } while (d.getDay() !== 5);
+    return d.toISOString();
+  })();
+
+  const SCENES = {
+    normal: {
+      five_hour: { utilization: 87, resets_at: in30m },
+      seven_day: { utilization: 18, resets_at: nextFriday },
+      limits: [{
+        kind: "weekly_scoped", group: "weekly", utilization: 31,
+        resets_at: nextFriday, scope: { model: { display_name: "Fable" } },
+      }],
+    },
+    danger: {
+      five_hour: { utilization: 92, resets_at: in30m },
+      seven_day: { utilization: 85, resets_at: nextFriday },
+      limits: [{
+        kind: "weekly_scoped", group: "weekly", utilization: 45,
+        resets_at: nextFriday, scope: { model: { display_name: "Fable" } },
+      }],
+    },
+    error: null, // usage 接口一律 500
+  };
+  const mockUsage = SCENES[scene];
+  const MOCK_ORG = "11111111-2222-3333-4444-555555555555";
+
+  // ---------- 2. mock fetch（须在 userscript 捕获 _origFetch 之前安装）----------
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const url = typeof input === "string" ? input : input instanceof Request ? input.url : "";
+    if (url.includes("claude.ai/api/bootstrap")) {
+      return new Response(JSON.stringify({ account: { uuid: MOCK_ORG } }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (/claude\.ai\/api\/organizations\/[^/]+\/(usage|rate_limit_status|limits)/.test(url)) {
+      if (!mockUsage) return new Response("mock error", { status: 500 });
+      return new Response(JSON.stringify(mockUsage), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    }
+    return realFetch(input, init);
+  };
+
+  // ---------- 3. stub @require 词库 ----------
+  window.TRANSLATIONS = {};
+  window.DESIGN_TRANSLATIONS = {};
+
+  // ---------- 4. 加载 userscript，绕过站点检查 ----------
+  const res = await realFetch("../../claude-chatgpt-usage.user.js");
+  let source = await res.text();
+  source = source
+    .replace('const isClaudeSite = location.hostname === "claude.ai";',
+             "const isClaudeSite = true;")
+    .replace('const isChatGPTSite = location.hostname === "chatgpt.com";',
+             "const isChatGPTSite = false;");
+  (0, eval)(source);
+})();
+</script>
+</body>
+</html>

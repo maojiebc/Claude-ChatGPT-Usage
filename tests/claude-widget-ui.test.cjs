@@ -11,8 +11,30 @@ const source = fs.readFileSync(
 test("Claude widget follows the compact and expanded reference dimensions", () => {
   assert.match(source, /\.compact-card\s*\{[\s\S]*?width:\s*104px;/);
   assert.match(source, /\.compact-row\s*\{[\s\S]*?min-height:\s*34px;/);
-  assert.match(source, /\.expanded-card\s*\{[\s\S]*?304px[\s\S]*?min-height:\s*306px;/);
+  assert.match(source, /\.expanded-card\s*\{[\s\S]*?304px/);
+  // 高度由内容决定：空态/失败态不再被 min-height 撑出空白。
+  assert.doesNotMatch(source, /\.expanded-card\s*\{[\s\S]*?min-height:\s*306px;/);
   assert.match(source, /right:\s*12px;/);
+});
+
+test("Claude widget cards transition between states instead of toggling display", () => {
+  // 收起/展开/设置面板通过 is-off 类做 opacity/transform/visibility 过渡。
+  assert.match(source, /\.compact-card\.is-off, \.expanded-card\.is-off\s*\{/);
+  assert.match(source, /compact\.classList\.toggle\("is-off"/);
+  assert.match(source, /expanded\.classList\.toggle\("is-off"/);
+  assert.match(source, /settings\.classList\.toggle\("is-off"/);
+  assert.match(source, /transform-origin: top right;/);
+});
+
+test("Claude expanded quota items carry type icons and neutral compact chips", () => {
+  // 展开态条目带类型图标（时钟/日历/火花），收起态胶囊回归中性底色。
+  assert.match(source, /claudeQuotaIcons\s*=\s*\{[\s\S]*?fiveHour:\s*"clock"[\s\S]*?sevenDay:\s*"calendar"/);
+  assert.match(source, /quota-icon/);
+  assert.match(
+    source,
+    /\.compact-row\s*\{[\s\S]*?background:\s*var\(--cu-bg-soft\);/,
+  );
+  assert.match(source, /\.compact-row\[data-danger\]/);
 });
 
 test("Claude widget has four explicit states and persistent settings", () => {

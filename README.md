@@ -9,7 +9,7 @@
 
 - **Claude.ai 完整中文汉化**：保留原项目 10,000+ 行翻译词条，覆盖 Claude Code、Artifacts、Projects、Cowork、Claude Design 等界面。
 - **Claude 额度显示**：显示 5 小时窗口、7 日总额度和 Fable 5 独立周额度。
-- **Claude 精简浮窗**：默认用 `5h / 7d / F5` 三行胶囊显示剩余比例，鼠标移入后展开完整进度、倒计时和重置时间。
+- **Claude 精简浮窗**：默认用 `5h / 7d / F5` 三行胶囊显示剩余比例，鼠标移入后平滑展开完整进度、倒计时和重置时间；展开态按额度类型配彩色图标，低额度自动转告警红。
 - **新旧接口兼容**：同时解析新版 `limits[]`、旧版 `seven_day_fable`、`fable_weekly` 等字段。
 - **ChatGPT/Codex 额度显示**：与 ChatGPT 网页端一致，显示套餐共享的每周使用限额和可用重置卡摘要。
 - **重置时间跟踪**：显示额度重置日期和剩余倒计时。
@@ -64,6 +64,7 @@ Claude-ChatGPT-Usage/
 ├── en.json                        # 原始英文词条
 ├── en2cn.json                     # 英中翻译映射
 ├── tests/                         # 用量解析与页面烟雾测试
+│   └── preview/harness.html       # 本地浮窗预览环境（mock 额度接口）
 └── CHANGELOG.md
 ```
 
@@ -73,6 +74,10 @@ Claude-ChatGPT-Usage/
 npm test
 node --check claude-chatgpt-usage.user.js
 ```
+
+调试浮窗样式时，在仓库根目录起任意静态服务（如 `python3 -m http.server 8642`），
+打开 `http://localhost:8642/tests/preview/harness.html` 即可脱离 claude.ai
+真实渲染浮窗，并切换明暗主题与正常 / 低额度 / 接口失败场景。
 
 ## 来源与授权
 

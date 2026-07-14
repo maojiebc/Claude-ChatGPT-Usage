@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.1.2
+// @version      1.2.0
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -668,6 +668,13 @@
       // Tabler Icons 风格的内嵌线性图标；不依赖外部 CDN。
       const paths = {
         bolt: '<path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/>',
+        boltFilled:
+          '<path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11" fill="currentColor" stroke="none"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+        calendar:
+          '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M4 11h16"/>',
+        sparkles:
+          '<path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z"/><path d="M16 6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z"/><path d="M9 18a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/>',
         close: '<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>',
         refresh:
           '<path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>',
@@ -677,9 +684,18 @@
       return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ""}</svg>`;
     }
 
+    const claudeQuotaIcons = {
+      fiveHour: "clock",
+      sevenDay: "calendar",
+      fableFive: "sparkles",
+      model: "sparkles",
+    };
+
     function createClaudePanel() {
       claudeSettings = loadClaudeSettings();
-      claudeWidgetState = claudeSettings.lastVisibleState;
+      // 窄视口（<900px）一律从收起态开始，避免展开卡遮挡正文。
+      claudeWidgetState =
+        window.innerWidth < 900 ? "collapsed" : claudeSettings.lastVisibleState;
       const host = document.createElement("div");
       host.id = "claude-usage-panel-bottom";
       host.setAttribute("data-claude-usage-widget", "v2");
@@ -688,14 +704,14 @@
         <style>
           :host {
             --cu-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-            --cu-bg: rgba(255, 255, 255, 0.94);
-            --cu-bg-soft: rgba(248, 249, 250, 0.94);
-            --cu-text: #202124;
-            --cu-text-secondary: #6f7379;
-            --cu-text-tertiary: #96999e;
-            --cu-border: rgba(32, 33, 36, 0.10);
-            --cu-divider: rgba(32, 33, 36, 0.08);
-            --cu-shadow: 0 10px 30px rgba(31, 35, 41, 0.10);
+            --cu-bg: rgba(255, 255, 255, 0.96);
+            --cu-bg-soft: rgba(32, 33, 36, 0.05);
+            --cu-text: #1f2124;
+            --cu-text-secondary: #6d7176;
+            --cu-text-tertiary: #989ba1;
+            --cu-border: rgba(32, 33, 36, 0.08);
+            --cu-divider: rgba(32, 33, 36, 0.06);
+            --cu-shadow: 0 18px 44px rgba(31, 35, 41, 0.13), 0 2px 8px rgba(31, 35, 41, 0.06);
             --cu-danger: #ef493d;
             --cu-transition: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
             position: fixed;
@@ -710,14 +726,14 @@
             user-select: none;
           }
           :host([data-theme="dark"]) {
-            --cu-bg: rgba(37, 38, 40, 0.94);
-            --cu-bg-soft: rgba(255, 255, 255, 0.055);
+            --cu-bg: rgba(38, 39, 42, 0.96);
+            --cu-bg-soft: rgba(255, 255, 255, 0.065);
             --cu-text: #f2f3f5;
             --cu-text-secondary: #b5b8bd;
             --cu-text-tertiary: #8f9399;
-            --cu-border: rgba(255, 255, 255, 0.11);
-            --cu-divider: rgba(255, 255, 255, 0.08);
-            --cu-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+            --cu-border: rgba(255, 255, 255, 0.10);
+            --cu-divider: rgba(255, 255, 255, 0.07);
+            --cu-shadow: 0 18px 48px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
             color-scheme: dark;
           }
           *, *::before, *::after { box-sizing: border-box; }
@@ -725,7 +741,28 @@
           button { color: inherit; }
           [hidden] { display: none !important; }
           svg { width: 18px; height: 18px; display: block; }
-          .usage-widget { position: relative; }
+          .usage-widget { position: relative; display: flex; justify-content: flex-end; }
+          /* 收起/展开互斥卡片：离场卡绝对定位叠在原地做淡出，在场卡撑起浮窗尺寸 */
+          .compact-card, .expanded-card {
+            transform-origin: top right;
+            transition: opacity var(--cu-transition), transform var(--cu-transition), box-shadow var(--cu-transition), visibility 0s linear 0s;
+          }
+          .compact-card.is-off, .expanded-card.is-off {
+            position: absolute;
+            top: 0;
+            right: 0;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: scale(0.96) translateY(-6px);
+            transition: opacity var(--cu-transition), transform var(--cu-transition), visibility 0s linear 200ms;
+          }
+          :host([data-anchor="bottom"]) .compact-card, :host([data-anchor="bottom"]) .expanded-card { transform-origin: bottom right; }
+          :host([data-anchor="bottom"]) .compact-card.is-off, :host([data-anchor="bottom"]) .expanded-card.is-off {
+            top: auto;
+            bottom: 0;
+            transform: scale(0.96) translateY(6px);
+          }
           .compact-card {
             width: 104px;
             padding: 8px;
@@ -738,9 +775,8 @@
             backdrop-filter: blur(12px) saturate(1.05);
             -webkit-backdrop-filter: blur(12px) saturate(1.05);
             cursor: pointer;
-            transition: opacity var(--cu-transition), transform var(--cu-transition), box-shadow var(--cu-transition);
           }
-          .compact-card:hover { transform: translateY(-1px); box-shadow: 0 14px 34px rgba(31, 35, 41, 0.13); }
+          .compact-card:hover { transform: translateY(-1px); }
           .compact-card:focus-visible, .icon-button:focus-visible, .setting-control:focus-visible, .reset-settings:focus-visible {
             outline: 2px solid #4285f4;
             outline-offset: 2px;
@@ -748,43 +784,53 @@
           .compact-list { display: grid; gap: 6px; }
           .compact-row {
             min-height: 34px;
-            padding: 0 9px;
+            padding: 0 10px;
             display: grid;
             grid-template-columns: 1fr auto;
             align-items: center;
             gap: 8px;
             border-radius: 10px;
-            background: var(--quota-soft, var(--cu-bg-soft));
+            background: var(--cu-bg-soft);
           }
+          .compact-row[data-danger] { background: var(--quota-soft, var(--cu-bg-soft)); }
           .compact-label { color: var(--cu-text-secondary); font-size: 12px; font-weight: 500; }
           .compact-percent { color: var(--quota-color); font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
           .compact-status { min-height: 34px; display: grid; place-items: center; color: var(--cu-text-secondary); font-size: 12px; }
           .expanded-card {
             width: min(304px, calc(100vw - 24px));
-            min-height: 306px;
             max-height: calc(100vh - 32px);
             display: flex;
-            overflow: auto;
+            overflow: hidden;
             flex-direction: column;
             border: 1px solid var(--cu-border);
-            border-radius: 16px;
+            border-radius: 18px;
             background: var(--cu-bg);
             box-shadow: var(--cu-shadow);
             backdrop-filter: blur(12px) saturate(1.05);
             -webkit-backdrop-filter: blur(12px) saturate(1.05);
-            transition: opacity var(--cu-transition), transform var(--cu-transition), width var(--cu-transition);
           }
           .widget-header {
-            min-height: 54px;
-            padding: 0 14px 0 16px;
+            flex: 0 0 auto;
+            min-height: 52px;
+            padding: 0 12px 0 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid var(--cu-divider);
             cursor: pointer;
           }
-          .widget-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
-          .widget-title svg { width: 14px; height: 14px; color: #ff7a45; stroke-width: 2; }
+          .widget-title { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
+          .title-badge {
+            width: 22px;
+            height: 22px;
+            display: grid;
+            place-items: center;
+            border-radius: 7px;
+            background: linear-gradient(135deg, #ff8a5c, #ff5f2e);
+            color: #fff;
+            box-shadow: 0 2px 6px rgba(255, 95, 46, 0.35);
+          }
+          .title-badge svg { width: 13px; height: 13px; }
           .icon-button {
             width: 32px;
             height: 32px;
@@ -798,19 +844,45 @@
             cursor: pointer;
           }
           .icon-button:hover { background: var(--cu-bg-soft); color: var(--cu-text); }
-          .quota-list { flex: 1 1 auto; padding: 3px 0; }
-          .quota-item { padding: 12px 16px 13px; }
-          .quota-meta, .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; }
-          .quota-meta { margin-bottom: 9px; }
-          .quota-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cu-text-secondary); font-size: 13px; font-weight: 500; }
-          .quota-remaining { color: var(--cu-text-secondary); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-          .quota-track { height: 6px; overflow: hidden; border-radius: 999px; background: var(--quota-soft); }
+          .quota-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0 5px; }
+          .quota-item { padding: 13px 16px 14px; }
+          .quota-meta {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            column-gap: 10px;
+            margin-bottom: 10px;
+          }
+          .quota-icon {
+            width: 26px;
+            height: 26px;
+            display: grid;
+            place-items: center;
+            border-radius: 8px;
+            background: var(--quota-soft);
+            background: color-mix(in srgb, var(--quota-color) 13%, transparent);
+            color: var(--quota-color);
+          }
+          :host([data-theme="dark"]) .quota-icon { background: var(--quota-soft); background: color-mix(in srgb, var(--quota-color) 22%, transparent); }
+          .quota-icon svg { width: 15px; height: 15px; stroke-width: 2; }
+          .quota-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cu-text); font-size: 13px; font-weight: 550; }
+          .quota-remaining { color: var(--cu-text-tertiary); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+          .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; }
+          .quota-track {
+            height: 7px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: var(--quota-soft);
+            background: color-mix(in srgb, var(--quota-color) 15%, transparent);
+          }
+          :host([data-theme="dark"]) .quota-track { background: var(--quota-soft); background: color-mix(in srgb, var(--quota-color) 24%, transparent); }
           .quota-fill { width: var(--remaining-percent); height: 100%; border-radius: inherit; background: var(--quota-color); transition: width 300ms ease; }
-          .quota-percent { min-width: 54px; text-align: right; color: var(--quota-color); font-size: 24px; line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; }
+          .quota-percent { min-width: 58px; text-align: right; color: var(--quota-color); font-size: 25px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
           .expanded-status { min-height: 132px; display: grid; place-items: center; padding: 24px; color: var(--cu-text-secondary); text-align: center; }
           .widget-footer {
-            min-height: 52px;
-            padding: 0 14px 0 16px;
+            flex: 0 0 auto;
+            min-height: 50px;
+            padding: 0 12px 0 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -818,19 +890,30 @@
             border-top: 1px solid var(--cu-divider);
             color: var(--cu-text-secondary);
           }
-          .reset-time { min-width: 0; display: flex; align-items: center; gap: 7px; font-size: 12px; white-space: nowrap; }
-          .reset-time svg { width: 15px; height: 15px; flex: 0 0 auto; }
-          .reset-time time { font-variant-numeric: tabular-nums; }
+          .reset-time { min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+          .reset-time svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--cu-text-tertiary); }
+          .reset-time time { font-variant-numeric: tabular-nums; color: var(--cu-text-secondary); }
           .settings-popover {
             position: absolute;
-            top: 62px;
+            top: 60px;
             right: 12px;
-            width: 252px;
+            z-index: 2;
+            width: 256px;
             padding: 14px;
             border: 1px solid var(--cu-border);
             border-radius: 14px;
             background: var(--cu-bg);
             box-shadow: var(--cu-shadow);
+            backdrop-filter: blur(14px) saturate(1.05);
+            -webkit-backdrop-filter: blur(14px) saturate(1.05);
+            transition: opacity var(--cu-transition), transform var(--cu-transition), visibility 0s linear 0s;
+          }
+          .settings-popover.is-off {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(-4px) scale(0.98);
+            transition: opacity var(--cu-transition), transform var(--cu-transition), visibility 0s linear 200ms;
           }
           .settings-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; }
           .setting-row { min-height: 38px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; color: var(--cu-text-secondary); font-size: 12px; }
@@ -862,9 +945,9 @@
             <span class="compact-list"></span>
             <span class="compact-status">正在获取额度…</span>
           </button>
-          <section class="expanded-card" hidden aria-label="Claude 用量详情">
+          <section class="expanded-card is-off" aria-label="Claude 用量详情">
             <header class="widget-header" data-action="collapse" title="点击空白区域收起">
-              <div class="widget-title">${claudeIcon("bolt")}<span>Claude 用量</span></div>
+              <div class="widget-title"><span class="title-badge">${claudeIcon("boltFilled")}</span><span>Claude 用量</span></div>
               <button class="icon-button" type="button" data-action="hide" aria-label="关闭用量浮窗">${claudeIcon("close")}</button>
             </header>
             <div class="quota-list"></div>
@@ -873,7 +956,7 @@
               <span class="reset-time">${claudeIcon("refresh")}<span>重置时间：</span><time>--/-- -- --:--</time></span>
               <button class="icon-button" type="button" data-action="settings" aria-label="用量浮窗设置">${claudeIcon("settings")}</button>
             </footer>
-            <div class="settings-popover" hidden>
+            <div class="settings-popover is-off">
               <h3 class="settings-title">浮窗设置</h3>
               <label class="setting-row"><span>自动收起</span><input class="setting-control" data-setting="autoCollapse" type="checkbox"></label>
               <label class="setting-row"><span>收起延迟</span><select class="setting-control" data-setting="autoCollapseDelay"><option value="2000">2 秒</option><option value="4000">4 秒</option><option value="8000">8 秒</option></select></label>
@@ -898,6 +981,8 @@
       host.style.top = "auto";
       host.style.bottom = "auto";
       host.style.transform = "none";
+      // data-anchor 决定离场卡片的对齐边与缩放方向（底部锚定时向上展开）。
+      host.setAttribute("data-anchor", claudeSettings.verticalPosition === "bottom" ? "bottom" : "top");
       if (claudeSettings.verticalPosition === "center") {
         host.style.top = "50%";
         host.style.transform = "translateY(-50%)";
@@ -939,9 +1024,10 @@
       const settings = claudeShadow.querySelector(".settings-popover");
       widget.dataset.state = next;
       panel.style.display = next === "hidden" ? "none" : "";
-      compact.hidden = next !== "collapsed";
-      expanded.hidden = !["expanded", "settings"].includes(next);
-      settings.hidden = next !== "settings";
+      // is-off 通过 opacity/transform/visibility 过渡离场，替代 hidden 的瞬间切换。
+      compact.classList.toggle("is-off", next !== "collapsed");
+      expanded.classList.toggle("is-off", !["expanded", "settings"].includes(next));
+      settings.classList.toggle("is-off", next !== "settings");
 
       if (["collapsed", "expanded"].includes(next)) {
         claudeSettings.lastVisibleState = next;
@@ -1126,6 +1212,7 @@
             shortLabel,
             fullLabel,
             remaining,
+            critical: remaining <= 10,
             remainingText: countdown ? `${countdown} 剩余` : "剩余时间待定",
             resetText: fmtExpiryTime(row.resets_at),
             color: isDanger ? "#ef493d" : baseColor,
@@ -1176,6 +1263,7 @@
         }
         compactRow.style.setProperty("--quota-color", row.color);
         compactRow.style.setProperty("--quota-soft", row.softColor);
+        compactRow.toggleAttribute("data-danger", row.critical);
         compactRow.querySelector(".compact-label").textContent = row.shortLabel;
         compactRow.querySelector(".compact-percent").textContent =
           `${row.remaining}%`;
@@ -1191,7 +1279,7 @@
           quotaItem.className = "quota-item";
           quotaItem.dataset.quotaKey = row.key;
           quotaItem.innerHTML = `
-            <div class="quota-meta"><span class="quota-name"></span><span class="quota-remaining"></span></div>
+            <div class="quota-meta"><span class="quota-icon" aria-hidden="true">${claudeIcon(claudeQuotaIcons[row.type] || "sparkles")}</span><span class="quota-name"></span><span class="quota-remaining"></span></div>
             <div class="quota-value-row"><div class="quota-track" aria-hidden="true"><div class="quota-fill"></div></div><strong class="quota-percent"></strong></div>`;
           quotaList.appendChild(quotaItem);
         }
