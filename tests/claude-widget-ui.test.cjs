@@ -16,6 +16,13 @@ test("Claude widget follows the compact and expanded reference dimensions", () =
   // v1.4.0 轻盈化：收起卡 96px（规格上限 104px 内），行高 30px。
   assert.match(source, /\.compact-card\s*\{[\s\S]*?width:\s*96px;/);
   assert.match(source, /\.compact-row\s*\{[\s\S]*?min-height:\s*30px;/);
+  // 固定百分比列并让缩写右对齐，100% / 70% / 46% 不再挤动 5h / 7d / F5。
+  assert.match(
+    source,
+    /\.compact-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) 40px;/,
+  );
+  assert.match(source, /\.compact-label\s*\{[^}]*justify-self:\s*end;/);
+  assert.match(source, /\.compact-percent\s*\{[^}]*text-align:\s*right;/);
   assert.match(source, /\.expanded-card\s*\{[\s\S]*?304px/);
   // 高度由内容决定：空态/失败态不再被 min-height 撑出空白。
   assert.doesNotMatch(source, /\.expanded-card\s*\{[\s\S]*?min-height:\s*306px;/);

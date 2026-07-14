@@ -113,8 +113,9 @@
       }],
     },
     palette: {
-      five_hour: { utilization: 14, resets_at: in30m },
-      seven_day: { utilization: 34, resets_at: nextFriday },
+      // 同时覆盖三档颜色与收起态 3/2/2 位百分比的列对齐。
+      five_hour: { utilization: 0, resets_at: in30m },
+      seven_day: { utilization: 30, resets_at: nextFriday },
       limits: [{
         kind: "weekly_scoped", group: "weekly", utilization: 54,
         resets_at: nextFriday, scope: { model: { display_name: "Fable" } },

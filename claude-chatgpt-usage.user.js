@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.5.4
+// @version      1.5.5
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -886,15 +886,15 @@
             min-height: 30px;
             padding: 0 9px;
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: minmax(0, 1fr) 40px;
             align-items: center;
-            gap: 8px;
+            gap: 5px;
             border-radius: 9px;
             background: var(--cu-bg-soft);
           }
           .compact-row[data-danger] { background: var(--quota-soft, var(--cu-bg-soft)); }
-          .compact-label { color: var(--cu-text-secondary); font-size: 12px; font-weight: 500; }
-          .compact-percent { color: var(--quota-color); font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+          .compact-label { min-width: 0; justify-self: end; color: var(--cu-text-secondary); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+          .compact-percent { width: 40px; justify-self: end; color: var(--quota-color); font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
           .compact-status { min-height: 30px; display: grid; place-items: center; color: var(--cu-text-secondary); font-size: 12px; }
           .expanded-card {
             width: min(304px, calc(100vw - 24px));
