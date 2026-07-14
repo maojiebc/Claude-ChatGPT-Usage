@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.0.0
+// @version      1.0.1
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -256,6 +256,8 @@
           if (window) {
             modelLimits.push({
               name: name ? `${name} · ${suffix}` : suffix,
+              modelName: name || "模型",
+              windowLabel: suffix,
               ...window,
             });
           }
@@ -410,6 +412,7 @@
         background: "rgb(254, 252, 245)",
         border: "1px solid rgb(240, 235, 225)",
         borderRadius: metrics.borderRadius,
+        boxSizing: "border-box",
         fontFamily: "system-ui, -apple-system, sans-serif",
         color: "rgb(80, 75, 65)",
         padding: metrics.padding,
@@ -512,6 +515,43 @@
       return { label: `${Math.round(minutes)}分钟窗口`, short: `${Math.round(minutes)}m` };
     }
 
+    function compactDurationLabel(label) {
+      return String(label || "").replace(/(?:配额|窗口)$/u, "");
+    }
+
+    function formatPlanName(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const normalized = raw.toLowerCase().replace(/[\s_-]+/g, "");
+      const knownPlans = {
+        free: "Free",
+        plus: "Plus",
+        pro: "Pro",
+        prolite: "Pro Lite",
+        team: "Team",
+        business: "Business",
+        enterprise: "Enterprise",
+        edu: "Edu",
+      };
+      if (knownPlans[normalized]) return knownPlans[normalized];
+      return raw
+        .replace(/[_-]+/g, " ")
+        .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+    }
+
+    function splitLegacyModelName(item) {
+      const explicitName = String(item?.modelName || "").trim();
+      const explicitWindow = String(item?.windowLabel || "").trim();
+      if (explicitName) {
+        return { modelName: explicitName, windowLabel: explicitWindow };
+      }
+      const legacyName = String(item?.name || "模型").trim();
+      const match = legacyName.match(/^(.*?)\s*·\s*(主窗口|次窗口)$/u);
+      return match
+        ? { modelName: match[1] || "模型", windowLabel: match[2] }
+        : { modelName: legacyName || "模型", windowLabel: explicitWindow };
+    }
+
     function getUsageRows() {
       const rows = [];
       if (usageData.fiveHour) {
@@ -524,6 +564,15 @@
           key: "primary",
           icon: "⚡",
           ...labels,
+          title: provider === "chatgpt" ? "主额度" : labels.label,
+          meta:
+            provider === "chatgpt" ? compactDurationLabel(labels.label) : "",
+          label:
+            provider === "chatgpt"
+              ? `主额度 · ${compactDurationLabel(labels.label)}`
+              : labels.label,
+          short:
+            provider === "chatgpt" ? `主·${labels.short}` : labels.short,
           ...usageData.fiveHour,
         });
       }
@@ -537,17 +586,34 @@
           key: "secondary",
           icon: "📅",
           ...labels,
+          title: provider === "chatgpt" ? "次额度" : labels.label,
+          meta:
+            provider === "chatgpt" ? compactDurationLabel(labels.label) : "",
+          label:
+            provider === "chatgpt"
+              ? `次额度 · ${compactDurationLabel(labels.label)}`
+              : labels.label,
+          short:
+            provider === "chatgpt" ? `次·${labels.short}` : labels.short,
           ...usageData.sevenDay,
         });
       }
       usageData.modelLimits.forEach((item, index) => {
         const labels = durationLabels(item, "模型配额", "模型");
-        const name = item.name || "模型";
+        const { modelName, windowLabel } = splitLegacyModelName(item);
+        const meta = [windowLabel, compactDurationLabel(labels.label)]
+          .filter(Boolean)
+          .join(" · ");
         rows.push({
           key: `model-${index}`,
           icon: "🧠",
-          label: `${name} · ${labels.label}`,
-          short: /^Fable 5$/i.test(name) ? "Fable" : name.slice(0, 8),
+          kind: "model",
+          title: modelName,
+          meta,
+          label: [modelName, meta].filter(Boolean).join(" · "),
+          short: /^Fable 5$/i.test(modelName)
+            ? "Fable"
+            : modelName.slice(0, 8),
           ...item,
         });
       });
@@ -559,11 +625,12 @@
     }
 
     function getPanelMetrics() {
+      const expandedWidth = provider === "chatgpt" ? 228 : 200;
       if (isMobileLayout()) {
         return {
           defaultRight: null,
           collapsedWidth: 32,
-          expandedWidth: Math.min(200, window.innerWidth - 16),
+          expandedWidth: Math.min(expandedWidth, window.innerWidth - 16),
           minWidth: 32,
           padding: "3px 2px",
           borderRadius: "4px",
@@ -572,7 +639,7 @@
       return {
         defaultRight: 8,
         collapsedWidth: 56,
-        expandedWidth: 200,
+        expandedWidth,
         minWidth: 56,
         padding: "8px 10px",
         borderRadius: "6px",
@@ -627,6 +694,12 @@
       const textMuted = isDark
         ? "rgba(200, 195, 185, 0.6)"
         : "rgba(80, 75, 65, 0.6)";
+      const dividerColor = isDark
+        ? "rgba(200, 195, 185, 0.16)"
+        : "rgba(80, 75, 65, 0.14)";
+      const badgeBackground = isDark
+        ? "rgba(255, 255, 255, 0.04)"
+        : "rgba(80, 75, 65, 0.04)";
       const metrics = getPanelMetrics();
 
       // 判断面板是否靠近右侧
@@ -672,17 +745,31 @@
         panel.style.width = expandedWidth + "px";
         panel.style.minWidth = expandedWidth + "px";
 
-        const plan = usageData.planName
-          ? `<div style="font-size:8px;color:${textMuted};margin-top:2px;">${escapeHtml(usageData.planName)}</div>`
+        const planName = formatPlanName(usageData.planName);
+        const plan = planName
+          ? `<div style="font-size:8px;color:${textMuted};margin-top:3px;letter-spacing:0.02em;">${escapeHtml(planName)}</div>`
           : "";
         const expandedRows = rows
           .map((row, index) => {
             const used = pct(row.utilization);
             const remain = 100 - used;
             const color = isDark ? clrDark(used) : clr(used);
+            const rowTitle = row.title || row.label;
+            const rowHeading = row.meta
+              ? `<div data-usage-heading="${row.kind === "model" ? "model" : "quota"}" title="${escapeHtml(row.label)}" style="display:flex;align-items:center;gap:5px;min-width:0;margin-bottom:5px;">
+                  <div style="display:flex;align-items:center;gap:4px;min-width:0;flex:1 1 auto;">
+                    <span aria-hidden="true" style="flex:0 0 auto;">${row.icon}</span>
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;font-weight:600;opacity:0.72;">${escapeHtml(rowTitle)}</span>
+                  </div>
+                  <span style="flex:0 0 auto;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7px;line-height:1.45;color:${textMuted};background:${badgeBackground};border:1px solid ${dividerColor};border-radius:999px;padding:1px 5px;">${escapeHtml(row.meta)}</span>
+                </div>`
+              : `<div style="font-size:9px;color:${textMuted};margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(row.label)}">${row.icon} ${escapeHtml(rowTitle)}</div>`;
+            const rowDivider = index
+              ? `border-top:1px solid ${dividerColor};margin-top:8px;padding-top:8px;`
+              : "";
             return `
-          <div>
-            <div style="font-size:9px;color:${textMuted};margin-bottom:3px;">${row.icon} ${escapeHtml(row.label)}</div>
+          <div data-usage-row="${escapeHtml(row.key)}" style="${rowDivider}">
+            ${rowHeading}
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
               <span style="font-size:11px;opacity:0.7;">剩余</span>
               <span style="font-size:16px;font-weight:600;color:${color};">${remain}%</span>
@@ -697,8 +784,8 @@
           .join("");
 
         panel.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div style="font-size:11px;font-weight:600;opacity:0.8;text-align:center;border-bottom:1px solid ${textMuted};padding-bottom:6px;">${escapeHtml(panelTitle)}${plan}</div>
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div style="font-size:11px;font-weight:600;opacity:0.8;text-align:center;border-bottom:1px solid ${textMuted};padding-bottom:6px;margin-bottom:10px;">${escapeHtml(panelTitle)}${plan}</div>
           ${expandedRows}
         </div>
       `;

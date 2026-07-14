@@ -12,8 +12,12 @@ test("runs on chatgpt.com and renders Codex quota without Claude globals", async
   const elements = new Map();
 
   function createElement() {
+    const listeners = new Map();
     return {
-      addEventListener() {},
+      _listeners: listeners,
+      addEventListener(type, listener) {
+        listeners.set(type, listener);
+      },
       getBoundingClientRect() {
         return { left: 1000, right: 1056, top: 50 };
       },
@@ -67,7 +71,7 @@ test("runs on chatgpt.com and renders Codex quota without Claude globals", async
     if (url === "https://chatgpt.com/backend-api/codex/usage") {
       return {
         json: async () => ({
-          plan_type: "plus",
+          plan_type: "prolite",
           rate_limit: {
             primary_window: {
               used_percent: 23,
@@ -80,6 +84,18 @@ test("runs on chatgpt.com and renders Codex quota without Claude globals", async
               limit_window_seconds: 604_800,
             },
           },
+          additional_rate_limits: [
+            {
+              limit_name: "GPT-5.3-Codex-Spark",
+              rate_limit: {
+                primary_window: {
+                  used_percent: 0,
+                  reset_at: 1_784_600_000,
+                  limit_window_seconds: 604_800,
+                },
+              },
+            },
+          ],
         }),
         ok: true,
         status: 200,
@@ -129,4 +145,11 @@ test("runs on chatgpt.com and renders Codex quota without Claude globals", async
   assert.equal(panel.title, "ChatGPT / Codex 用量");
   assert.match(panel.innerHTML, /77%/);
   assert.match(panel.innerHTML, /36%/);
+  panel._listeners.get("mouseenter")();
+  assert.equal(panel.style.width, "228px");
+  assert.match(panel.innerHTML, /Pro Lite/);
+  assert.match(panel.innerHTML, /data-usage-heading="model"/);
+  assert.match(panel.innerHTML, /GPT-5\.3-Codex-Spark/);
+  assert.match(panel.innerHTML, /主窗口 · 7天/);
+  assert.match(panel.innerHTML, /text-overflow:ellipsis/);
 });

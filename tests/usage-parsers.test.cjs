@@ -101,6 +101,8 @@ test("parses ChatGPT Codex windows and additional model limits", () => {
   assert.equal(parsed.fiveHour.window_minutes, 300);
   assert.equal(parsed.sevenDay.window_minutes, 10_080);
   assert.equal(parsed.modelLimits[0].name, "GPT-5.5 · 主窗口");
+  assert.equal(parsed.modelLimits[0].modelName, "GPT-5.5");
+  assert.equal(parsed.modelLimits[0].windowLabel, "主窗口");
   assert.equal(parsed.modelLimits[0].window_minutes, 1440);
 });
 
