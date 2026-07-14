@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.5.5
+// @version      1.5.6
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -1299,10 +1299,10 @@
     // 因“已用量 < 60%”而仍显示绿色。额度类型继续由条目图标区分。
     function quotaHealthColors(remaining) {
       const value = Math.max(0, Math.min(100, Number(remaining) || 0));
-      if (value >= 80) return ["#059669", "rgba(5, 150, 105, 0.14)"];
-      if (value >= 60) return ["#4d9e0a", "rgba(77, 158, 10, 0.14)"];
-      if (value >= 40) return ["#ea580c", "rgba(234, 88, 12, 0.14)"];
-      return ["#ef4444", "rgba(239, 68, 68, 0.14)"];
+      if (value >= 80) return ["#18b96b", "rgba(24, 185, 107, 0.14)"];
+      if (value >= 60) return ["#4285f4", "rgba(66, 133, 244, 0.14)"];
+      if (value >= 40) return ["#ff6b3d", "rgba(255, 107, 61, 0.14)"];
+      return ["#ef493d", "rgba(239, 73, 61, 0.14)"];
     }
 
     function getClaudeViewRows() {

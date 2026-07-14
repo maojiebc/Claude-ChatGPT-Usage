@@ -29,7 +29,7 @@ test("ChatGPT weekly quota renders with calendar icon and health colors", () => 
 });
 
 test("quota colors follow remaining-health tiers shared by both providers", () => {
-  // 直接按剩余额度判断：充足翡翠绿、关注青柠绿、偏低橙、告急红。
+  // 直接按剩余额度判断，并复用原设计稿的鲜绿、明蓝、珊瑚橙与告警红。
   const health = source.match(
     /function quotaHealthColors\(remaining\)[\s\S]*?\n    \}/,
   );
@@ -37,14 +37,14 @@ test("quota colors follow remaining-health tiers shared by both providers", () =
   const colorFor = Function(
     `"use strict"; ${health[0]}; return quotaHealthColors;`,
   )();
-  assert.equal(colorFor(100)[0], "#059669");
-  assert.equal(colorFor(80)[0], "#059669");
-  assert.equal(colorFor(79)[0], "#4d9e0a");
-  assert.equal(colorFor(60)[0], "#4d9e0a");
-  assert.equal(colorFor(59)[0], "#ea580c");
-  assert.equal(colorFor(46)[0], "#ea580c");
-  assert.equal(colorFor(39)[0], "#ef4444");
-  assert.equal(colorFor(0)[0], "#ef4444");
+  assert.equal(colorFor(100)[0], "#18b96b");
+  assert.equal(colorFor(80)[0], "#18b96b");
+  assert.equal(colorFor(79)[0], "#4285f4");
+  assert.equal(colorFor(60)[0], "#4285f4");
+  assert.equal(colorFor(59)[0], "#ff6b3d");
+  assert.equal(colorFor(46)[0], "#ff6b3d");
+  assert.equal(colorFor(39)[0], "#ef493d");
+  assert.equal(colorFor(0)[0], "#ef493d");
   // 两端视图行都走健康度色，不再按额度类型固定配色。
   const healthCalls =
     source.match(/= quotaHealthColors\(remaining\)/g) || [];

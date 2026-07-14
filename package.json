@@ -1,6 +1,6 @@
 {
   "name": "claude-chatgpt-usage",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "private": true,
   "description": "Claude.ai Chinese translation and Claude/ChatGPT quota userscript",
   "license": "MIT",
