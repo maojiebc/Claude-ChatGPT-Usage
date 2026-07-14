@@ -42,6 +42,7 @@
   <button id="btn-site"></button>
   <button id="btn-theme">🌓 明/暗</button>
   <button data-scene="normal">正常额度</button>
+  <button data-scene="palette">色阶预览</button>
   <button data-scene="danger">低额度告警</button>
   <button data-scene="error">接口失败</button>
   <button id="btn-clear">清设置并刷新</button>
@@ -111,6 +112,14 @@
         resets_at: nextFriday, scope: { model: { display_name: "Fable" } },
       }],
     },
+    palette: {
+      five_hour: { utilization: 14, resets_at: in30m },
+      seven_day: { utilization: 34, resets_at: nextFriday },
+      limits: [{
+        kind: "weekly_scoped", group: "weekly", utilization: 54,
+        resets_at: nextFriday, scope: { model: { display_name: "Fable" } },
+      }],
+    },
     danger: {
       five_hour: { utilization: 92, resets_at: in30m },
       seven_day: { utilization: 85, resets_at: nextFriday },
@@ -127,6 +136,13 @@
       rate_limit: {
         primary_window: { used_percent: 23, resets_at: in30m, limit_window_seconds: 18000 },
         secondary_window: { used_percent: 64, resets_at: nextFriday, limit_window_seconds: 604800 },
+      },
+      rate_limit_reset_credits: { available_count: 4 },
+    },
+    palette: {
+      plan_type: "prolite",
+      rate_limit: {
+        secondary_window: { used_percent: 34, resets_at: nextFriday, limit_window_seconds: 604800 },
       },
       rate_limit_reset_credits: { available_count: 4 },
     },

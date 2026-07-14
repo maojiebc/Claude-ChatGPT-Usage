@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.5.2
+// @version      1.5.3
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -1295,13 +1295,14 @@
       registerClaudeMenuCommands();
     }
 
-    // 健康度三档配色（沿用原版 claude2cn 阈值）：颜色表达"还剩多少"，
-    // 额度类型的区分交给条目图标（时钟/日历/火花），不再按类型固定配色。
+    // 剩余额度四档配色：直接以 remaining 判断，避免 46% 等中低额度
+    // 因“已用量 < 60%”而仍显示绿色。额度类型继续由条目图标区分。
     function quotaHealthColors(remaining) {
-      const used = 100 - remaining;
-      if (used < 60) return ["#10b981", "rgba(16, 185, 129, 0.12)"];
-      if (used < 85) return ["#f59e0b", "rgba(245, 158, 11, 0.13)"];
-      return ["#ef4444", "rgba(239, 68, 68, 0.11)"];
+      const value = Math.max(0, Math.min(100, Number(remaining) || 0));
+      if (value >= 80) return ["#059669", "rgba(5, 150, 105, 0.14)"];
+      if (value >= 60) return ["#c37a04", "rgba(195, 122, 4, 0.14)"];
+      if (value >= 40) return ["#ea580c", "rgba(234, 88, 12, 0.14)"];
+      return ["#ef4444", "rgba(239, 68, 68, 0.14)"];
     }
 
     function getClaudeViewRows() {
