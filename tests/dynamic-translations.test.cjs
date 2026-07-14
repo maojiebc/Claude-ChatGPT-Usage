@@ -38,6 +38,37 @@ test("translates dynamic Fable usage and reset date", () => {
   );
 });
 
+test("translates a Fable banner split across multiple DOM text segments", () => {
+  assert.equal(
+    translations.translateSegments([
+      "You’ve used ",
+      "82%",
+      " of your Fable 5 limit",
+      " · Resets Jul 18 at 12:00 AM",
+    ]),
+    "您已使用 Fable 5 额度的 82% · 将于 7月18日 00:00 重置",
+  );
+  assert.equal(
+    translations.translateSegments([
+      "You’ve used",
+      "82%",
+      "of your ",
+      "Fable 5",
+      " limit · Resets Jul 18 at 12:00 AM",
+    ]),
+    "您已使用 Fable 5 额度的 82% · 将于 7月18日 00:00 重置",
+  );
+});
+
+test("ignores invisible separators in dynamic Claude banners", () => {
+  assert.equal(
+    translations.translate(
+      "You’ve used\u200B 82% of your Fable 5 limit · Resets Jul 18 at 12:00 AM",
+    ),
+    "您已使用 Fable 5 额度的 82% · 将于 7月18日 00:00 重置",
+  );
+});
+
 test("supports straight apostrophes, decimal percentages and relative reset days", () => {
   assert.equal(
     translations.translate(

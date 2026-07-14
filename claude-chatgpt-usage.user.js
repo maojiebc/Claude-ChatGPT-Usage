@@ -6,7 +6,7 @@
 // @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
-// @version      1.1.0
+// @version      1.1.1
 // @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
@@ -437,7 +437,11 @@
     }
 
     function translate(value) {
-      const text = String(value || "").trim();
+      const original = String(value || "").trim();
+      const text = original
+        .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+        .replace(/\u00A0/g, " ")
+        .replace(/[ \t]{2,}/g, " ");
       if (!text) return text;
 
       const greetingMatch = text.match(
@@ -449,7 +453,7 @@
       }
 
       const usageMatch = text.match(
-        /^You(?:'|’)ve used\s+(\d+(?:\.\d+)?\s*%)\s+of your\s+(.+?)\s+limit(?:\s*[·∙•]\s*Resets\s+(.+))?$/i,
+        /^You(?:'|’)ve used\s*(\d+(?:\.\d+)?\s*%)\s*of\s+your\s*(.+?)\s+limit(?:\s*[·∙•]\s*Resets\s+(.+))?$/i,
       );
       if (usageMatch) {
         const percent = usageMatch[1].replace(/\s+/g, "");
@@ -463,10 +467,16 @@
         return `${usagePrefix} ${percent}${reset}`;
       }
 
-      return text;
+      return original;
     }
 
-    return Object.freeze({ formatResetTime, translate });
+    function translateSegments(values) {
+      const original = values.map((value) => String(value || "")).join("");
+      const translated = translate(original);
+      return translated !== original.trim() ? translated : null;
+    }
+
+    return Object.freeze({ formatResetTime, translate, translateSegments });
   })();
   // END DYNAMIC_TRANSLATIONS
 
@@ -2199,6 +2209,71 @@
       }
     }
 
+    function translateDynamicContainers(root) {
+      if (!root) return;
+      const seedNodes = [];
+      if (root.nodeType === Node.TEXT_NODE) {
+        seedNodes.push(root);
+      } else if (root.nodeType === Node.ELEMENT_NODE) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let textNode;
+        while ((textNode = walker.nextNode())) seedNodes.push(textNode);
+      }
+
+      const candidates = new Set();
+      for (const textNode of seedNodes) {
+        if (!/(?:you|used|fable|resets)/i.test(textNode.nodeValue || "")) {
+          continue;
+        }
+        let element = textNode.parentElement;
+        for (let depth = 0; element && depth < 5; depth += 1) {
+          candidates.add(element);
+          if (element === root) break;
+          element = element.parentElement;
+        }
+      }
+
+      const orderedCandidates = [...candidates].sort((a, b) => {
+        const depth = (element) => {
+          let value = 0;
+          while (element?.parentElement) {
+            value += 1;
+            element = element.parentElement;
+          }
+          return value;
+        };
+        return depth(b) - depth(a);
+      });
+
+      for (const element of orderedCandidates) {
+        if (shouldSkipTranslation(element)) continue;
+        const combined = String(element.textContent || "").trim();
+        if (!combined || combined.length > 240) continue;
+        const translated = DynamicTranslations.translate(combined);
+        if (translated === combined) continue;
+
+        const textNodes = [];
+        const walker = document.createTreeWalker(
+          element,
+          NodeFilter.SHOW_TEXT,
+        );
+        let textNode;
+        while ((textNode = walker.nextNode())) {
+          if (textNode.nodeValue?.trim() && !shouldSkipTranslation(textNode)) {
+            textNodes.push(textNode);
+          }
+        }
+        if (!textNodes.length) continue;
+
+        const first = textNodes[0];
+        const raw = first.nodeValue || "";
+        const leading = raw.match(/^\s*/)?.[0] || "";
+        const trailing = raw.match(/\s*$/)?.[0] || "";
+        first.nodeValue = `${leading}${translated}${trailing}`;
+        for (const extraNode of textNodes.slice(1)) extraNode.nodeValue = "";
+      }
+    }
+
     function translateNode(node) {
       if (node.nodeType === Node.TEXT_NODE) {
         translateTextNode(node);
@@ -2206,6 +2281,7 @@
         node.nodeType === Node.ELEMENT_NODE &&
         !shouldSkipTranslation(node)
       ) {
+        translateDynamicContainers(node);
         translateAttrs(node);
         const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
         let textNode;
@@ -2224,6 +2300,7 @@
       for (const mutation of mutations) {
         if (mutation.type === "characterData") {
           translateTextNode(mutation.target);
+          translateDynamicContainers(mutation.target);
         } else if (
           mutation.type === "attributes" &&
           mutation.target.nodeType === Node.ELEMENT_NODE
