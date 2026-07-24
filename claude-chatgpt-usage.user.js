@@ -1,19 +1,19 @@
 // ==UserScript==
-// @name         Claude & ChatGPT 中文汉化与用量显示
-// @namespace    https://github.com/maojiebc/Claude-ChatGPT-Usage/
-// @homepageURL  https://github.com/maojiebc/Claude-ChatGPT-Usage/
-// @supportURL   https://github.com/maojiebc/Claude-ChatGPT-Usage/issues
-// @source       https://github.com/maojiebc/Claude-ChatGPT-Usage/
+// @name         CC-Usage
+// @namespace    https://github.com/maojiebc/CC-Usage/
+// @homepageURL  https://github.com/maojiebc/CC-Usage/
+// @supportURL   https://github.com/maojiebc/CC-Usage/issues
+// @source       https://github.com/maojiebc/CC-Usage/
 // @author       jyking (original), maojiebc (maintainer)
 // @copyright    2026, jyking and maojiebc
 // @version      1.5.6
-// @description  Claude.ai 完整中文汉化，并显示 Claude/Fable 5 与 ChatGPT/Codex 剩余用量
+// @description  claude.ai 中文汉化+chatgpt.com额度显示
 // @icon         https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cd02a42d9-Vq_H3mgS.svg
 // @match        https://claude.ai/*
 // @match        https://chatgpt.com/*
-// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-design.user.js#sha256=19fefdebcb71584886bfa494aed0e54c4922860f01d9db367e838489ab8afb48
-// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.0.0/claude2cn-translations.user.js#sha256=587a5de6adf25d5aa19f1e6f58b5bb6181f31e5d89e49669a3c75a85df8ff61a
-// @require      https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/v1.5.2/claude-usage-icons.user.js#sha256=9050bccec82b4413ce99420766796c0d6af2dd34aeafa9e49b38c3e169bbe6f5
+// @require      https://raw.githubusercontent.com/maojiebc/CC-Usage/v1.0.0/claude2cn-design.user.js#sha256=19fefdebcb71584886bfa494aed0e54c4922860f01d9db367e838489ab8afb48
+// @require      https://raw.githubusercontent.com/maojiebc/CC-Usage/v1.0.0/claude2cn-translations.user.js#sha256=587a5de6adf25d5aa19f1e6f58b5bb6181f31e5d89e49669a3c75a85df8ff61a
+// @require      https://raw.githubusercontent.com/maojiebc/CC-Usage/v1.5.2/claude-usage-icons.user.js#sha256=9050bccec82b4413ce99420766796c0d6af2dd34aeafa9e49b38c3e169bbe6f5
 // @grant        none
 // @license      MIT
 // @run-at       document-start

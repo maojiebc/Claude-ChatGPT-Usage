@@ -1,9 +1,9 @@
-# Claude-ChatGPT-Usage
+# CC-Usage
 
-> Claude.ai 完整中文汉化，以及 Claude、Fable 5、ChatGPT/Codex 订阅额度显示。
+> claude.ai 中文汉化+chatgpt.com额度显示
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Userscript](https://img.shields.io/badge/Tampermonkey-Userscript-black?logo=tampermonkey)](https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/main/claude-chatgpt-usage.user.js)
+[![Userscript](https://img.shields.io/badge/Tampermonkey-Userscript-black?logo=tampermonkey)](https://raw.githubusercontent.com/maojiebc/CC-Usage/main/claude-chatgpt-usage.user.js)
 
 ## 功能
 
@@ -23,7 +23,7 @@
 ### Tampermonkey / Violentmonkey
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)。
-2. 点击安装：[claude-chatgpt-usage.user.js](https://raw.githubusercontent.com/maojiebc/Claude-ChatGPT-Usage/main/claude-chatgpt-usage.user.js)。
+2. 点击安装：[claude-chatgpt-usage.user.js](https://raw.githubusercontent.com/maojiebc/CC-Usage/main/claude-chatgpt-usage.user.js)。
 3. 刷新 [Claude.ai](https://claude.ai/) 或 [ChatGPT](https://chatgpt.com/)。
 
 目前仅通过 GitHub 发布和更新，不在 Greasy Fork 上架。
@@ -58,7 +58,7 @@
 ## 项目结构
 
 ```text
-Claude-ChatGPT-Usage/
+CC-Usage/
 ├── claude-chatgpt-usage.user.js  # 主用户脚本
 ├── claude-usage-icons.user.js     # Claude 浮窗内嵌图标资源
 ├── assets/claude-usage-icons/     # 图标 PNG 与生成源图
